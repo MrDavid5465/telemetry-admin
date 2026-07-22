@@ -40,7 +40,9 @@ function writeThemeCache(settings: { theme?: string; fontSize?: number }) {
 }
 
 export const setTheme = (theme: any, themes: any) => {
-  loadTheme(themes[(theme && theme.theme) || "default"](theme.fontSize || 1));
+  const key = (theme && theme.theme) || "default";
+  const build = themes[key] || themes.default;
+  loadTheme(build(theme.fontSize || 1));
 };
 
 interface Props {
@@ -93,7 +95,6 @@ const App: React.FC<Props> = ({
               Brand={Brand}
               Controls={Controls}
               ExternalApps={ExternalApps}
-              themes={themes}
             />
           }
         />

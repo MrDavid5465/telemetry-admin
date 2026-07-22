@@ -17,14 +17,12 @@ interface Props {
   my: any;
   Brand?: React.FC<any>;
   Controls?: React.FC<any>;
-  themes: any;
   ExternalApps?: React.FC<any>;
 }
 
 export const Header: React.FC<Props> = ({
   my,
   Brand,
-  themes,
   Controls,
   ExternalApps
 }) => {
@@ -103,7 +101,6 @@ export const Header: React.FC<Props> = ({
           isOpen={isOpen}
           dismissPanel={dismissPanel}
           my={my}
-          themes={themes}
           ExternalApps={ExternalApps}
         />
         <NavBar my={my} Controls={Controls} className={style.navBar} />

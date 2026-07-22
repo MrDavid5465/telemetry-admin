@@ -9,7 +9,6 @@ interface Props {
   my: Partial<IUser>;
   isOpen: boolean;
   dismissPanel: () => any;
-  themes: any;
   ExternalApps?: React.FC<any>;
 }
 
@@ -17,7 +16,6 @@ export const AppNavBar: React.FC<Props> = ({
   my,
   isOpen,
   dismissPanel,
-  themes,
   ExternalApps,
 }) => {
   const { pathname, ...state } = useLocation()
@@ -82,7 +80,6 @@ export const AppNavBar: React.FC<Props> = ({
             isOpen={modalOpen}
             dismissModal={dismissModal}
             settings={settings}
-            themes={themes}
           />
         </>
       )}

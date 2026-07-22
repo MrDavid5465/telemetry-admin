@@ -1,7 +1,8 @@
 import { IForm } from '../../../../per-form';
 import { getAppId } from '../../../../../graphql/client';
+import { COLOR_KEYS, COLOR_LABELS, MODE_KEYS, MODE_LABELS } from '../../../../themes';
 
-export const userSettings = (themes: any, deviceMap?: Record<string, string>) => {
+export const userSettings = (deviceMap?: Record<string, string>) => {
   const appId = getAppId();
 
   const existingNames = Object.values(deviceMap ?? {})
@@ -30,10 +31,15 @@ export const userSettings = (themes: any, deviceMap?: Record<string, string>) =>
       label: 'Launch Page',
       required: false,
     },
-    theme: {
+    themeColor: {
+      type: 'select',
+      label: 'Colour',
+      options: COLOR_KEYS.map(k => ({ key: k, text: COLOR_LABELS[k], value: k })),
+    },
+    themeMode: {
       type: 'select',
       label: 'Theme',
-      options: Object.keys(themes).map(k => ({ key: k, text: k, value: k })),
+      options: MODE_KEYS.map(k => ({ key: k, text: MODE_LABELS[k], value: k })),
     },
     fontSize: {
       type: 'select',

@@ -25,7 +25,7 @@ const SetupWizard: React.FC<Props> = ({ onComplete }) => {
       await updateSettings({
         variables: {
           settings: {
-            theme: settings.theme ?? 'darkgreen',
+            theme: settings.theme ?? 'dark-green',
             fontSize: settings.fontSize ?? 1.0,
             launchPage: settings.launchPage ?? '',
             deviceMap: settings.deviceMap ?? {},
