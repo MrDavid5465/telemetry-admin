@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800">
+  <defs>
+    <radialGradient id="dashBg" cx="50%" cy="55%" r="65%">
+      <stop offset="0%" stop-color="#1e1e1e"/>
+      <stop offset="100%" stop-color="#080808"/>
+    </radialGradient>
+    <!-- Left gauge well shadow -->
+    <radialGradient id="wellLeft" cx="50%" cy="50%" r="50%">
+      <stop offset="60%" stop-color="transparent"/>
+      <stop offset="100%" stop-color="#00000066"/>
+    </radialGradient>
+    <!-- Right gauge well shadow -->
+    <radialGradient id="wellRight" cx="50%" cy="50%" r="50%">
+      <stop offset="60%" stop-color="transparent"/>
+      <stop offset="100%" stop-color="#00000066"/>
+    </radialGradient>
+    <linearGradient id="topReflect" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff08"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Main background -->
+  <rect width="1280" height="800" fill="url(#dashBg)"/>
+
+  <!-- Subtle top highlight (instrument cluster bezel reflection) -->
+  <rect width="1280" height="120" fill="url(#topReflect)"/>
+
+  <!-- Left gauge well (recess for tachometer ~x=168 y=230) -->
+  <circle cx="353" cy="400" r="215" fill="url(#wellLeft)"/>
+
+  <!-- Right gauge well (recess for speedometer ~x=744 y=229) -->
+  <circle cx="929" cy="400" r="215" fill="url(#wellRight)"/>
+
+  <!-- Center console divider line (subtle) -->
+  <line x1="620" y1="180" x2="660" y2="180" stroke="#2a2a2a" stroke-width="2"/>
+
+  <!-- VW logo area center hint (subtle badge shape) -->
+  <ellipse cx="640" cy="400" rx="48" ry="28" fill="none" stroke="#222" stroke-width="1"/>
+
+  <!-- Bottom trim line -->
+  <rect x="0" y="770" width="1280" height="30" fill="#0a0a0a"/>
+  <line x1="0" y1="770" x2="1280" y2="770" stroke="#2a2a2a" stroke-width="1"/>
+</svg>

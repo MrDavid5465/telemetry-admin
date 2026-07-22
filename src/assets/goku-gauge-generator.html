@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Goku Gauge Face Generator</title>
+<style>
+  * { box-sizing: border-box; }
+  body { background: #0d0d0d; color: #eee; font-family: system-ui, sans-serif;
+         display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px; }
+  h2 { margin: 0; color: #f5a623; }
+  canvas { border-radius: 50%; box-shadow: 0 0 40px rgba(255,180,0,0.2); }
+  .row { display: flex; align-items: center; gap: 12px; }
+  input[type=range] { width: 320px; accent-color: #f5a623; }
+  button { padding: 10px 22px; border: none; border-radius: 6px; font-size: 14px;
+           cursor: pointer; font-weight: bold; transition: opacity .15s; }
+  button:disabled { opacity: .4; cursor: default; }
+  #btnPlay  { background: #2a6; color: #fff; }
+  #btnGen   { background: #f5a623; color: #000; }
+  .info { background: #1a1a1a; padding: 12px 16px; border-radius: 8px; font-size: 13px;
+          line-height: 1.7; color: #bbb; max-width: 540px; text-align: center; }
+  code { background: #2a2a2a; padding: 1px 6px; border-radius: 3px; font-family: monospace; color: #ffd; }
+  #status { font-size: 13px; color: #999; height: 18px; }
+</style>
+</head>
+<body>
+
+<h2>Goku Gauge Face Generator</h2>
+
+<canvas id="preview" width="512" height="512"></canvas>
+
+<div class="row">
+  <button id="btnPlay">▶ Play</button>
+  <input type="range" id="slider" min="0" max="39" value="0">
+  <span id="frameNum" style="min-width:50px;text-align:right">Frame 0</span>
+</div>
+
+<div class="info">
+  40 frames · 512×512 px · 8 columns × 5 rows → sheet 4096×2560<br>
+  Component: <code>gifFrameCount=40</code>&nbsp; <code>gifCols=8</code><br>
+  Binding: <code>field=rpm</code>&nbsp; <code>inputMin=0</code>&nbsp; <code>inputMax=9000</code><br>
+  For threshold effect only: set <code>inputMin=7500</code> <code>inputMax=9000</code>
+</div>
+
+<div class="row">
+  <button id="btnGen">Generate &amp; Download Spritesheet</button>
+</div>
+<div id="status"></div>
+
+<script>
+'use strict';
+
+const FRAMES = 40, FW = 512, FH = 512, COLS = 8;
+const ROWS   = Math.ceil(FRAMES / COLS);
+
+// ── deterministic LCG RNG seeded per frame ──
+function makeRng(seed) {
+  let s = (seed ^ 0x9e3779b9) >>> 0;
+  return () => {
+    s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
+    s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
+    s = (s ^ (s >>> 16)) >>> 0;
+    return s / 0xffffffff;
+  };
+}
+
+// ── colour helpers ──
+function hexToRgb(h) {
+  if (h.startsWith('#'))
+    return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+  // handle rgb(r,g,b) returned by lerpRgb so nested lerpHex calls work
+  const m = h.match(/\d+/g);
+  return m ? [+m[0], +m[1], +m[2]] : [0, 0, 0];
+}
+function lerp(a, b, t) { return a + (b - a) * t; }
+function lerpRgb(a, b, t) {
+  return `rgb(${Math.round(lerp(a[0],b[0],t))},${Math.round(lerp(a[1],b[1],t))},${Math.round(lerp(a[2],b[2],t))})`;
+}
+function lerpHex(a, b, t) { return lerpRgb(hexToRgb(a), hexToRgb(b), t); }
+function rgba255(r,g,b,a) { return `rgba(${r},${g},${b},${a})`; }
+
+// ── easing ──
+function ss(lo, hi, t) {               // smoothstep
+  const x = Math.max(0, Math.min(1, (t - lo) / (hi - lo)));
+  return x * x * (3 - 2 * x);
+}
+
+// ── lightning bolt ──
+function bolt(ctx, x0, y0, angle, length, rng, opts = {}) {
+  const steps = opts.steps ?? 7;
+  const spread = opts.spread ?? 0.55;
+  const pts = [[x0, y0]];
+  let ang = angle;
+  const step = length / steps;
+  for (let i = 0; i < steps; i++) {
+    ang += (rng() - 0.5) * spread * 2;
+    const [px, py] = pts[pts.length - 1];
+    pts.push([px + Math.cos(ang) * step, py + Math.sin(ang) * step]);
+  }
+  // glow
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (const [px,py] of pts.slice(1)) ctx.lineTo(px, py);
+  ctx.strokeStyle = opts.glow ?? 'rgba(80,140,255,0.35)';
+  ctx.lineWidth = opts.glowW ?? 6;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  // core
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (const [px,py] of pts.slice(1)) ctx.lineTo(px, py);
+  ctx.strokeStyle = opts.core ?? 'rgba(200,220,255,0.9)';
+  ctx.lineWidth = opts.coreW ?? 1.5;
+  ctx.stroke();
+}
+
+// ── gauge markings ──
+function drawMarkings(ctx, cx, cy, R, alpha) {
+  const startAng = (220 * Math.PI) / 180;
+  const sweep    = (260 * Math.PI) / 180;
+  const maxRpm   = 9000;
+  const tickR    = R * 0.86;
+
+  // redline arc band
+  const redStart = startAng + (8000 / maxRpm) * sweep;
+  ctx.save();
+  ctx.strokeStyle = rgba255(255, 30, 30, alpha);
+  ctx.lineWidth = 9;
+  ctx.lineCap = 'butt';
+  ctx.beginPath();
+  ctx.arc(cx, cy, tickR - 1, redStart, startAng + sweep);
+  ctx.stroke();
+
+  // normal arc
+  ctx.strokeStyle = rgba255(180, 180, 200, alpha * 0.4);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, tickR, startAng, redStart);
+  ctx.stroke();
+
+  // ticks
+  for (let rpm = 0; rpm <= maxRpm; rpm += 250) {
+    const isMajor = rpm % 1000 === 0;
+    const isMid   = rpm % 500 === 0;
+    if (!isMajor && !isMid && rpm % 250 !== 0) continue;
+    const ang = startAng + (rpm / maxRpm) * sweep;
+    const len = isMajor ? R * 0.13 : isMid ? R * 0.08 : R * 0.05;
+    const r1 = tickR, r2 = tickR - len;
+    const isRed = rpm >= 8000;
+    ctx.strokeStyle = isRed
+      ? rgba255(255, 60, 60, alpha)
+      : rgba255(255, 255, 255, alpha * (isMajor ? 0.85 : isMid ? 0.55 : 0.3));
+    ctx.lineWidth = isMajor ? 2.5 : 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1);
+    ctx.lineTo(cx + Math.cos(ang) * r2, cy + Math.sin(ang) * r2);
+    ctx.stroke();
+  }
+
+  // labels
+  const lblR = tickR - R * 0.17;
+  ctx.font = `bold ${Math.round(FW * 0.056)}px 'Arial Narrow', Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (let rpm = 1000; rpm <= maxRpm; rpm += 1000) {
+    const ang = startAng + (rpm / maxRpm) * sweep;
+    const lx = cx + Math.cos(ang) * lblR;
+    const ly = cy + Math.sin(ang) * lblR;
+    const isRed = rpm >= 8000;
+    ctx.fillStyle = isRed ? rgba255(255,90,90,alpha) : rgba255(230,230,255,alpha * 0.85);
+    ctx.fillText(String(rpm / 1000), lx, ly);
+  }
+
+  // sub-label
+  ctx.font = `${Math.round(FW * 0.038)}px Arial`;
+  ctx.fillStyle = rgba255(160,160,185, alpha * 0.55);
+  ctx.fillText('×1000 RPM', cx, cy + R * 0.48);
+
+  ctx.restore();
+}
+
+// ── main frame ──
+function drawFrame(ctx, frame, offX, offY) {
+  const t  = frame / (FRAMES - 1);
+  const cx = offX + FW / 2;
+  const cy = offY + FH / 2;
+  const R  = FW / 2 - 7;
+
+  // ── clip to circle ──
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.clip();
+
+  // ── background ──
+  {
+    const phase0 = ss(0.00, 0.35, t);   // normal → heating
+    const phase1 = ss(0.35, 0.72, t);   // heating → golden
+    const phase2 = ss(0.72, 1.00, t);   // golden → blinding
+
+    const inner = phase2 > 0
+      ? lerpHex(lerpHex('#220a00','#ffcc44', phase1), '#fffff0', phase2)
+      : lerpHex('#0c0c1a', '#2a0a00', phase0);
+    const outer = phase2 > 0
+      ? lerpHex(lerpHex('#0a0414','#552200', phase1), '#997700', phase2)
+      : lerpHex('#080812', '#1e0400', phase0);
+
+    const bg = ctx.createRadialGradient(cx, cy - R * 0.15, 0, cx, cy, R);
+    bg.addColorStop(0,   inner);
+    bg.addColorStop(0.5, lerpHex(inner, outer, 0.5));
+    bg.addColorStop(1,   outer);
+    ctx.fillStyle = bg;
+    ctx.fillRect(offX, offY, FW, FH);
+
+    // stars (early frames only)
+    if (t < 0.45) {
+      const starFade = 1 - ss(0.15, 0.45, t);
+      const sr = makeRng(0xdeadbeef);
+      for (let i = 0; i < 55; i++) {
+        const sx = offX + sr() * FW;
+        const sy = offY + sr() * FH;
+        const ss2 = 0.6 + sr() * 1.4;
+        const sa = starFade * (0.25 + sr() * 0.75);
+        ctx.fillStyle = `rgba(220,220,255,${sa})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, ss2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // ── concentric heat shimmer rings ──
+  const auraT = ss(0.12, 0.65, t);
+  if (auraT > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const ringColor = ss(0.45, 0.75, t) > 0.4 ? [255, 200, 20] : [255, 80, 10];
+    const [rr, rg, rb] = ringColor;
+    for (let ri = 0; ri < 6; ri++) {
+      const phase = ((t * 4 + ri / 6) % 1.0);
+      const ringR = phase * R * 0.97;
+      const a = auraT * (1 - phase) * 0.32;
+      const gr = ctx.createRadialGradient(cx, cy, ringR * 0.75, cx, cy, ringR);
+      gr.addColorStop(0, 'rgba(0,0,0,0)');
+      gr.addColorStop(0.7, rgba255(rr, rg, rb, a * 0.25));
+      gr.addColorStop(1, rgba255(rr, rg, rb, a));
+      ctx.fillStyle = gr;
+      ctx.beginPath();
+      ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ── core glow ──
+  if (auraT > 0) {
+    const glowColor = ss(0.5, 0.85, t) > 0.35 ? [255, 215, 40] : [255, 100, 10];
+    const [gr, gg, gb] = glowColor;
+    const size = R * (0.12 + auraT * 0.42);
+    const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, size);
+    core.addColorStop(0, rgba255(gr, gg, gb, auraT * 0.95));
+    core.addColorStop(0.45, rgba255(gr, gg, gb, auraT * 0.45));
+    core.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = core;
+    ctx.fillRect(offX, offY, FW, FH);
+    ctx.restore();
+  }
+
+  // ── energy pillar (vertical column of light) ──
+  const pillarT = ss(0.38, 0.80, t);
+  if (pillarT > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const pw = R * (0.08 + pillarT * 0.18);
+    for (let layer = 0; layer < 3; layer++) {
+      const lw = pw * (1 + layer * 0.5);
+      const la = pillarT * (0.6 - layer * 0.15);
+      const col = layer === 0 ? [255,240,150] : [255,160,20];
+      const pg = ctx.createLinearGradient(cx, offY + FH, cx, offY);
+      pg.addColorStop(0, rgba255(col[0],col[1],col[2], la));
+      pg.addColorStop(0.35, rgba255(col[0],col[1],col[2], la * 0.6));
+      pg.addColorStop(0.7, rgba255(col[0],col[1],col[2], la * 0.25));
+      pg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = pg;
+      ctx.beginPath();
+      ctx.moveTo(cx - lw,     offY + FH);
+      ctx.lineTo(cx + lw,     offY + FH);
+      ctx.lineTo(cx + lw * 0.25, offY);
+      ctx.lineTo(cx - lw * 0.25, offY);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ── gauge markings (fade slightly at peak but stay readable) ──
+  {
+    const marksAlpha = 1 - ss(0.78, 1.00, t) * 0.5;
+    drawMarkings(ctx, cx, cy, R, marksAlpha);
+  }
+
+  // ── energy particles ──
+  const partT = ss(0.18, 0.68, t);
+  if (partT > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const pr = makeRng(frame * 41 + 13);
+    const count = Math.floor(6 + partT * 80);
+    for (let i = 0; i < count; i++) {
+      const ang = pr() * Math.PI * 2;
+      const dist = pr() * R * 0.88;
+      const px = cx + Math.cos(ang) * dist;
+      const py = cy + Math.sin(ang) * dist;
+      const sz = 1.2 + pr() * 3.5 * partT;
+      const bright = 0.35 + pr() * 0.65;
+      const isGold = ss(0.38, 0.65, t) > pr() * 0.9;
+      const [cr,cg,cb] = isGold ? [255,210,40] : [255,90,20];
+      const pa = bright * partT * 0.9;
+      ctx.fillStyle = rgba255(cr, cg, cb, pa);
+      ctx.beginPath();
+      ctx.arc(px, py, sz, 0, Math.PI * 2);
+      ctx.fill();
+      if (sz > 2.2) {
+        const tailLen = sz * 8;
+        const tailAng = ang + Math.PI;
+        ctx.strokeStyle = rgba255(cr, cg, cb, pa * 0.5);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + Math.cos(tailAng) * tailLen, py + Math.sin(tailAng) * tailLen);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  // ── aura spikes (silhouette of SSJ hair at top) ──
+  const spikeT = ss(0.62, 0.90, t);
+  if (spikeT > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const sr = makeRng(frame * 7 + 99);
+    const spikeCount = 9;
+    for (let si = 0; si < spikeCount; si++) {
+      const baseAng  = -Math.PI / 2 + (si - spikeCount / 2) * 0.22;
+      const spikeLen = R * (0.45 + sr() * 0.35) * spikeT;
+      const spikeW   = 0.06 + sr() * 0.08;
+      const bx1 = cx + Math.cos(baseAng - spikeW) * (R * 0.55);
+      const by1 = cy + Math.sin(baseAng - spikeW) * (R * 0.55);
+      const bx2 = cx + Math.cos(baseAng + spikeW) * (R * 0.55);
+      const by2 = cy + Math.sin(baseAng + spikeW) * (R * 0.55);
+      const tip1x = cx + Math.cos(baseAng) * spikeLen;
+      const tip1y = cy + Math.sin(baseAng) * spikeLen;
+      const sa = spikeT * (0.5 + sr() * 0.4);
+      const sg = ctx.createLinearGradient(
+        (bx1+bx2)/2, (by1+by2)/2, tip1x, tip1y
+      );
+      sg.addColorStop(0, rgba255(255, 220, 60, sa * 0.8));
+      sg.addColorStop(0.5, rgba255(255, 200, 30, sa * 0.5));
+      sg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sg;
+      ctx.beginPath();
+      ctx.moveTo(bx1, by1);
+      ctx.lineTo(tip1x, tip1y);
+      ctx.lineTo(bx2, by2);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ── lightning arcs ──
+  const lightT = ss(0.58, 0.90, t);
+  if (lightT > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const lr = makeRng(frame * 17 + 5);
+    const boltCount = Math.round(lightT * 9);
+    for (let b = 0; b < boltCount; b++) {
+      const startAng = lr() * Math.PI * 2;
+      const bLen = R * (0.25 + lr() * 0.55);
+      bolt(ctx, cx, cy, startAng, bLen, lr, {
+        glow:  rgba255(60, 100, 255, lightT * 0.55),
+        glowW: 7,
+        core:  rgba255(190, 215, 255, lightT * 0.95),
+        coreW: 1.5,
+        spread: 0.65,
+      });
+    }
+    ctx.restore();
+  }
+
+  // ── golden flood (SSJ achieved) ──
+  const superT = ss(0.70, 1.00, t);
+  if (superT > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const flood = ctx.createRadialGradient(cx, cy - R * 0.08, 0, cx, cy, R);
+    flood.addColorStop(0,   rgba255(255, 255, 200, superT * 0.85));
+    flood.addColorStop(0.28, rgba255(255, 220, 60,  superT * 0.55));
+    flood.addColorStop(0.6,  rgba255(255, 140, 0,   superT * 0.25));
+    flood.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.fillStyle = flood;
+    ctx.fillRect(offX, offY, FW, FH);
+    ctx.restore();
+  }
+
+  ctx.restore(); // end circle clip
+
+  // ── bezel ring ──
+  {
+    const superT2 = ss(0.62, 0.95, t);
+    const bezelCol = superT2 > 0
+      ? lerpHex('#555566', '#ddbb00', superT2)
+      : '#3a3a4a';
+    ctx.strokeStyle = bezelCol;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R + 1, 0, Math.PI * 2);
+    ctx.stroke();
+    if (superT2 > 0.1) {
+      ctx.strokeStyle = rgba255(255, 238, 100, superT2 * 0.55);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R + 4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+}
+
+// ── Preview ──
+const previewCtx = document.getElementById('preview').getContext('2d');
+
+function showFrame(f) {
+  previewCtx.fillStyle = '#111';
+  previewCtx.fillRect(0, 0, 512, 512);
+  drawFrame(previewCtx, f, 0, 0);
+  document.getElementById('frameNum').textContent = `Frame ${f}`;
+  document.getElementById('slider').value = f;
+}
+
+showFrame(0);
+document.getElementById('slider').addEventListener('input', e => showFrame(+e.target.value));
+
+// ── Play preview ──
+let playTimer = null;
+let playFrame = 0;
+document.getElementById('btnPlay').addEventListener('click', () => {
+  const btn = document.getElementById('btnPlay');
+  if (playTimer) {
+    clearInterval(playTimer);
+    playTimer = null;
+    btn.textContent = '▶ Play';
+    return;
+  }
+  btn.textContent = '⏹ Stop';
+  playFrame = +document.getElementById('slider').value;
+  playTimer = setInterval(() => {
+    playFrame = (playFrame + 1) % FRAMES;
+    showFrame(playFrame);
+  }, 50); // ~20fps preview
+});
+
+// ── Generate full spritesheet ──
+document.getElementById('btnGen').addEventListener('click', async () => {
+  if (playTimer) { clearInterval(playTimer); playTimer = null; document.getElementById('btnPlay').textContent = '▶ Play'; }
+  const btn = document.getElementById('btnGen');
+  const status = document.getElementById('status');
+  btn.disabled = true;
+
+  const sheet = document.createElement('canvas');
+  sheet.width  = COLS * FW;
+  sheet.height = ROWS * FH;
+  const sctx = sheet.getContext('2d');
+  sctx.fillStyle = '#000';
+  sctx.fillRect(0, 0, sheet.width, sheet.height);
+
+  for (let f = 0; f < FRAMES; f++) {
+    const col = f % COLS;
+    const row = Math.floor(f / COLS);
+    drawFrame(sctx, f, col * FW, row * FH);
+    status.textContent = `Rendering frame ${f + 1} / ${FRAMES}…`;
+    if (f % 5 === 0) await new Promise(r => setTimeout(r, 0));
+  }
+
+  status.textContent = 'Encoding PNG…';
+  sheet.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'goku-gauge-face.png';
+    a.click();
+    URL.revokeObjectURL(url);
+    btn.disabled = false;
+    const kb = Math.round(blob.size / 1024);
+    status.textContent = `Done — ${kb} KB  (${COLS}×${ROWS} grid, ${FRAMES} frames)`;
+  }, 'image/png');
+});
+</script>
+</body>
+</html>

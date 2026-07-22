@@ -1,0 +1,447 @@
+use typiql::{typiql_schema, typiql_type};
+use crate::graphql::app_config::{AppConfigQuery, AppConfigMutation};
+use crate::graphql::builtin_templates::BuiltinTemplatesQuery;
+use crate::graphql::dashboard_files::{DashboardFileSyncQuery, DashboardFileUploadMutation};
+use crate::graphql::clients::ClientsMutation;
+use crate::graphql::{CarFileMutation, CarPhotoSyncQuery, DashTemplateThumbnailMutation, DashboardMutation, GamepadMutation, ShakerDspMutation, ShakerDspQuery};
+use crate::graphql::{QueryRoot, SubscriptionRoot};
+
+/// A dashboard's location — enough to list it and find its folder. The only
+/// part of a dashboard stored in the shared config file; its actual
+/// configuration lives entirely in its own folder (see `Dashboard` below),
+/// which is what makes dashboards portable (copy the folder, get the whole
+/// dashboard) and makes "remove from list" incapable of destroying the one
+/// copy of the config — `removeDashboardEntry` only ever drops this row.
+#[typiql_type]
+pub struct DashboardEntry {
+    #[typiql(key)]
+    pub id: String,
+    pub name: String,
+    pub path: String,
+    /// Not stored in the main config file at all — `Dashboard` has no
+    /// default location of its own (`#[typiql_type(no_location)]`), read
+    /// fresh on every access from `<path>/.dashboard.json`'s `dashboard`
+    /// table. Writes go through the hand-written `addDashboard`/
+    /// `updateDashboard` mutations in `graphql/dashboard_entry.rs`.
+    #[typiql(relation(file = "{path}/.dashboard.json", table = "dashboard"))]
+    pub dashboard: Option<Dashboard>,
+}
+
+/// A dashboard's actual configuration — canvas, elements, kiosk settings,
+/// thumbnails. A "dumb" type: no default storage location, reachable only
+/// via `DashboardEntry.dashboard` above (reads) or the hand-written
+/// `addDashboard`/`updateDashboard` mutations (writes) — see
+/// `graphql/dashboard_entry.rs`. Field list unchanged from when this was a
+/// `#[typiql_type]`-managed row directly in the main config file.
+#[typiql_type(no_location)]
+pub struct Dashboard {
+    pub base_dash_type: String,
+    pub canvas_width: i32,
+    pub canvas_height: i32,
+    pub background: Option<String>,
+    pub day_night: bool,
+    pub neck_fx: bool,
+    /// JSON-serialized Vec<SpriteElement> / ComponentNode tree.
+    pub elements: String,
+    pub kiosk_x: i32,
+    pub kiosk_y: i32,
+    pub kiosk_opacity: f32,
+    /// Filenames (within the shared thumbnails cache dir, served from
+    /// `/thumbnails/*`) of captured day/night preview screenshots.
+    pub thumbnail_day: Option<String>,
+    pub thumbnail_night: Option<String>,
+    pub group_ids: Option<String>,
+}
+
+/// One physical shaker channel — independent of both Monocoque's own effect
+/// rows (`MonocoqueSoundDevice`, joined via matching `pan`) and of the real
+/// audio device's own channel count: a user's interface may expose more
+/// channels than they have shakers actually wired up, and separate channels
+/// are often driven by entirely separate physical USB devices (e.g. several
+/// cheap "nobsound"-style USB stereo amps, each its own PipeWire sink), not
+/// different channels of one shared device. `devid`/`channels` are picked
+/// independently per channel for exactly that reason — there's no single
+/// "the" output device to default a new channel to.
+#[typiql_type]
+pub struct ShakerChannel {
+    #[typiql(key)]
+    pub id: String,
+    /// Null = live/active set. A UUID = belongs to a named SoundDeviceProfile.
+    pub profile_id: Option<String>,
+    /// The real output channel index on this channel's own `devid` — set
+    /// directly by the user (bounded 0..channels), not an internal identity.
+    /// Unique only within this channel's own device, not globally: two
+    /// channels on *different* devices can legitimately share a pan value
+    /// (e.g. each device's own channel 0), matching real hardware numbering.
+    /// `MonocoqueSoundDevice`/`LfeChannel` rows reference this channel via
+    /// their own `channel_id` field, not by pan — pan is looked up fresh
+    /// through that join whenever the real output index is needed, never
+    /// duplicated onto those rows.
+    pub pan: u8,
+    /// Always this channel's real hardware device — never overwritten by DSP
+    /// mode. Unlike the prior per-row design (which persisted a DSP-sink
+    /// override into storage, backed up via pre_dsp_devid and restored on
+    /// disable), the DSP-mode devid substitution is computed fresh at export
+    /// time only (buildConfigText), the same "never touches storage" pattern
+    /// already used for pan/channels/dsp_slot substitution — and it has to
+    /// be, now that devid lives per-channel while the DSP override is
+    /// inherently per-*effect* (each effect gets its own isolated capture
+    /// sink; see pipewire_dsp::effect_sink_name). No backup/restore needed
+    /// at all: this field simply never changes due to DSP state.
+    pub devid: String,
+    pub channels: u8,
+    /// One of FrontLeft/FrontRight/RearLeft/RearRight/Front/Rear/Left/Right/
+    /// All (see shakerUtils.ts's cornersToConfig/configToCorners) — this
+    /// channel's physical position, applied uniformly to every tyre-capable
+    /// effect on it (suspension/tyreslip/tyrelock/abs) when exporting.
+    /// None until the user sets one.
+    pub position: Option<String>,
+}
+
+#[typiql_type]
+pub struct MonocoqueSoundDevice {
+    #[typiql(key)]
+    pub id: String,
+    pub device: String,
+    pub effect: String,
+    /// This row's channel — a direct reference to ShakerChannel.id. The
+    /// row's real physical pan (for the exported `pan =` line), devid, and
+    /// channels are all looked up fresh through this join, never duplicated
+    /// onto this row — so they can't go stale if the channel's own pan is
+    /// edited later. Replaced a flat `pan` field that joined directly against
+    /// ShakerChannel.pan; that stopped being safe once pan became
+    /// user-editable and no longer globally unique (see ShakerChannel.pan's
+    /// doc comment).
+    pub channel_id: String,
+    /// Always this effect's real/intended volume — never overwritten by DSP
+    /// mode (same "computed at export time only, never touches storage"
+    /// reasoning as ShakerChannel.devid's doc comment: while DSP is active,
+    /// the exported config's volume line is 100 regardless of this stored
+    /// value, computed fresh in buildConfigText, since real attenuation
+    /// happens via the DSP fader instead).
+    pub volume: u8,
+    pub modulation: String,
+    pub frequency: Option<f32>,
+    pub frequency_max: Option<f32>,
+    pub amplitude: Option<f32>,
+    pub amplitude_max: Option<f32>,
+    /// Null = live/active set. A UUID = belongs to a named SoundDeviceProfile.
+    pub profile_id: Option<String>,
+    /// This row's permanent, never-overwritten identity as one of the DSP
+    /// filter-chain's isolated capture channels — distinct from `pan`, which
+    /// stays the row's real physical output-channel target at all times
+    /// (used by CarLayout/ShakerMatrix's corner grouping and tyre
+    /// assignment, completely unaffected by DSP state). Assigned once at
+    /// row-creation time by the frontend (max existing dspSlot + 1), never
+    /// touched again — enableShakerDsp substitutes this for `pan` only in
+    /// the *generated* Monocoque config text (buildConfigText), never in
+    /// storage, so every effect gets its own isolated Monocoque stream while
+    /// the app's own notion of "which corner" never changes underneath it.
+    pub dsp_slot: Option<u8>,
+}
+
+/// A named shaker configuration profile.
+/// Records belonging to this profile are MonocoqueSoundDevice entries with a matching profile_id.
+#[typiql_type]
+pub struct SoundDeviceProfile {
+    #[typiql(key)]
+    pub id: String,
+    pub name: String,
+    pub car: Option<String>,
+    pub game: Option<String>,
+    /// The first profile ever created is automatically the default (enforced
+    /// client-side at creation time); new profiles seed their initial
+    /// ShakerDspChannel values from whichever profile currently holds this
+    /// flag. At most one profile should have this true at a time — enforced
+    /// by setDefaultSoundDeviceProfile, not by storage itself.
+    pub is_default: bool,
+}
+
+/// One row per (profile, DSP slot) — the PipeWire-side DSP settings for
+/// that slot, decoupled from Monocoque's own per-effect fields on
+/// MonocoqueSoundDevice. `slot` matches MonocoqueSoundDevice.dsp_slot (a
+/// row's permanent isolated-capture-channel identity), NOT its physical
+/// output pan — deliberately a different field name from the
+/// MonocoqueSoundDevice.pan it's adjacent to in concept, since the two now
+/// mean different things (see MonocoqueSoundDevice.dsp_slot's doc comment).
+/// Consumed only by enableShakerDsp when building the filter-chain graph
+/// (graphql/shaker_dsp.rs) — Monocoque itself never reads these. Same
+/// live(null)/profile(id) scoping convention as MonocoqueSoundDevice, so it
+/// clones/loads through the same profile save/load flow.
+#[typiql_type]
+pub struct ShakerDspChannel {
+    #[typiql(key)]
+    pub id: String,
+    pub profile_id: Option<String>,
+    pub slot: u8,
+    /// None = LPF bypassed for this channel.
+    pub lpf_hz: Option<f32>,
+    /// 0-100, PipeWire-side gain applied after the LPF. Default 100 (unity).
+    pub fader: u8,
+    /// When true, this channel is silenced in the live filter-chain (Mult
+    /// forced to 0) without touching the stored `fader` value — mirrors the
+    /// LPF bypass pattern (see `lpf_hz`'s None) but as an explicit flag
+    /// rather than an Option, since `fader` has no natural "off" sentinel
+    /// (0% is itself a valid tuned value). Lets a user isolate one effect at
+    /// a time for real-hardware verification without losing their mix.
+    pub muted: bool,
+}
+
+/// One physical corner's slice of the LFE "effect" — a whole extra signal
+/// path, not a Monocoque effect at all: it taps AppSettings.shaker_lfe_
+/// source_device's monitor, downmixes to mono, runs it through one shared
+/// bq_lowpass (AppSettings.shaker_lfe_lpf_hz — global, since there's only
+/// one downmixed signal, unlike the per-corner lpf_hz on ShakerDspChannel),
+/// then fans the same filtered mono signal out to every enabled corner at
+/// its own fader/mute. Never touches MonocoqueSoundDevice or the exported
+/// Monocoque config — purely a PipeWire-side addition, live-applied the
+/// same way as ShakerDspChannel (see graphql/shaker_dsp.rs). DSP mode must
+/// be enabled for this to have any live effect; rows can still be edited
+/// while it's off, same as ShakerDspChannel.
+#[typiql_type]
+pub struct LfeChannel {
+    #[typiql(key)]
+    pub id: String,
+    pub profile_id: Option<String>,
+    /// This corner's channel — a direct reference to ShakerChannel.id, same
+    /// join shape as MonocoqueSoundDevice.channel_id (see its doc comment).
+    /// LfeChannel rows are never written to the exported config, so this is
+    /// purely an internal join key, not a Monocoque-facing value.
+    pub channel_id: String,
+    /// 0-100, applied after the shared downmix+LPF stage.
+    pub fader: u8,
+    pub muted: bool,
+}
+
+/// Arduino serial LED controller (Serial / Simleds).
+#[typiql_type]
+pub struct MonocoqueLedsDevice {
+    #[typiql(key)]
+    pub id: String,
+    pub devpath: String,
+    pub baud: u32,
+    pub num_leds: u8,
+    pub start_led: u8,
+    pub end_led: u8,
+    pub config: String,
+    pub profile_id: Option<String>,
+}
+
+/// USB tachometer / shift-light indicator (e.g. Revburner).
+#[typiql_type]
+pub struct MonocoqueShiftLight {
+    #[typiql(key)]
+    pub id: String,
+    pub devid: String,
+    pub subtype: String,
+    pub granularity: u8,
+    pub config: String,
+    pub profile_id: Option<String>,
+}
+
+/// Arduino serial SimWind fan controller (Serial / SimWind).
+#[typiql_type]
+pub struct MonocoqueSimWindDevice {
+    #[typiql(key)]
+    pub id: String,
+    pub devpath: String,
+    pub baud: u32,
+    pub fan_power: f32,
+    pub config: String,
+    pub profile_id: Option<String>,
+}
+
+/// A reusable dashboard component template saved globally across dashboards.
+/// `component` is a JSON-serialized ComponentNode tree.
+#[typiql_type]
+pub struct DashTemplate {
+    #[typiql(key)]
+    pub id: String,
+    pub name: String,
+    /// Auto-detected gauge kind: "needle", "bar", "digital", "combination", or "none"
+    pub gauge_type: String,
+    /// JSON-serialized ComponentNode
+    pub component: String,
+    /// Filename (within the thumbnails cache dir, served from `/thumbnails/*`)
+    /// of a captured preview of this template's component tree — set via
+    /// upload_dash_template_thumbnail, same convention as Car/Dashboard
+    /// thumbnails. Not a live-rendered preview — storing that per template
+    /// card was explicitly rejected as non-performant.
+    pub thumbnail: Option<String>,
+}
+
+/// Tracks connected app instances for per-device dashboard configuration.
+/// `id` is a UUID generated and persisted in the client's localStorage.
+/// `last_seen` is a Unix timestamp string updated on each heartbeat.
+#[typiql_type]
+pub struct ConnectedClient {
+    #[typiql(key)]
+    pub id: String,
+    pub name: Option<String>,
+    pub last_seen: String,
+}
+
+/// A named group of dashboards with car-specific routing.
+/// `car_dash_map` is JSON: `Record<carName, dashboardName>`.
+#[typiql_type]
+pub struct DashGroup {
+    #[typiql(key)]
+    pub id: String,
+    pub name: String,
+    pub default_dash: Option<String>,
+    pub car_dash_map: String,
+}
+
+/// Tracks car names seen in telemetry. `id` is the car name itself; `name` mirrors it.
+#[typiql_type]
+pub struct KnownCar {
+    #[typiql(key)]
+    pub id: String,
+    pub name: Option<String>,
+}
+
+/// A stored file. Keyed by its real, stable filesystem `path` — `id` is a
+/// content hash, recomputed by sync_car_photos whenever the real file's
+/// bytes change, so `url` (built from the current id) naturally cache-busts
+/// on edit without any relationship pointing at this record ever needing to
+/// be touched (relations key off `path`, never `id`). Deliberately general —
+/// not car-specific — so it can later back other stored-file needs (dashboard
+/// sprites, thumbnails, other 360s), which already have stable real paths.
+#[typiql_type]
+pub struct File {
+    #[typiql(key)]
+    pub path: String,
+    pub id: String,
+    pub filename: String,
+    pub url: String,
+}
+
+/// A physical car, optionally linked to one or more raw car identifiers as
+/// reported by telemetry (`car_ids`). Can exist before any photo is uploaded
+/// (created via plain `addCar` with just name + car_ids) — day_photo stays
+/// optional until a day photo is uploaded via `uploadCarPhoto`.
+#[typiql_type]
+pub struct Car {
+    #[typiql(key)]
+    pub id: String,
+    pub name: String,
+    /// JSON-serialized Vec<String> of raw car_ids (KnownCar.id values) this
+    /// Car represents — same convention as Dashboard.elements/group_ids,
+    /// since the macro doesn't support native Vec<String> fields. Softly
+    /// enforced client-side that a given raw car_id belongs to at most one Car.
+    pub car_ids: String,
+    /// The day 360° photo, resolved via the File relation below — matched
+    /// against day_photo_path, which is set once at first upload and never
+    /// updated again (only the File row it points at changes over time).
+    #[typiql(relation(local = "day_photo_path", op = "eq", foreign = "path"))]
+    pub day_photo: Option<File>,
+    pub day_photo_path: Option<String>,
+    /// Optional night variant of the same shot (same camera position,
+    /// different lighting) — same relation shape as day_photo. Falls back to
+    /// day_photo when unset.
+    #[typiql(relation(local = "night_photo_path", op = "eq", foreign = "path"))]
+    pub night_photo: Option<File>,
+    pub night_photo_path: Option<String>,
+    /// Filename (within the thumbnails cache dir, served from `/thumbnails/*`)
+    /// of a small captured screenshot of the car's freelook 360° viewer, used
+    /// for the car card grid instead of rendering a live WebGL viewer per
+    /// card. Captured automatically the first time the freelook viewer loads
+    /// this photo, and re-capturable on demand. Not the raw image data —
+    /// storing that inline would bloat the JSON store. Out of scope for the
+    /// File-relation migration — stays a plain filename for now.
+    pub thumbnail: Option<String>,
+}
+
+/// Global day/night state, shared live across every dashboard and kiosk display
+/// via the auto-generated `nightModeChanged` subscription. Effectively a
+/// singleton — the app operates on whichever single record exists, creating
+/// one on first use.
+#[typiql_type]
+pub struct NightMode {
+    #[typiql(key)]
+    pub id: String,
+    pub is_night: bool,
+}
+
+/// Global "preview car" — when set and the sim isn't actively running, kiosk
+/// displays act as if this raw car_id were the live-telemetry car for
+/// 360°-photo/pan purposes. `car_id` here is always a RAW car identifier (as
+/// reported by telemetry / KnownCar.id) — NOT a Car record's own `id` — so it
+/// blends seamlessly with live telemetry's own raw car_id in
+/// DashboardDesigner. Singleton, like NightMode.
+#[typiql_type]
+pub struct PreviewCar {
+    #[typiql(key)]
+    pub id: String,
+    pub car_id: String,
+}
+
+/// Per-car pan override for a specific 360° dashboard. `car_id` here is a Car
+/// record's own `id` (NOT a raw telemetry car_id) — pan alignment is a
+/// property of the physical car itself, kept consistent across every
+/// game/raw car_id that car might appear under. Field name kept as `car_id`
+/// unchanged even though what it points to has changed, to minimize churn.
+/// At most one record per (car_id, dash_name); falls back to the dashboard's
+/// own base pan when no override exists.
+#[typiql_type]
+pub struct CarDashPan {
+    #[typiql(key)]
+    pub id: String,
+    pub car_id: String,
+    pub dash_name: String,
+    pub yaw: f64,
+    pub pitch: f64,
+    pub fov: f64,
+    pub roll: f64,
+}
+
+/// Maps a device (by human-readable name) or `device_name = "default"` to a
+/// dashboard or group. Stored in the JSON adapter; the subscription lets kiosk
+/// screens reroute automatically when the operator changes the mapping.
+#[typiql_type]
+pub struct DeviceDefault {
+    #[typiql(key)]
+    pub id: String,
+    pub device_name: String,
+    pub dash: Option<String>,
+    pub group: Option<String>,
+}
+
+/// Named profile for LED controller configurations.
+#[typiql_type]
+pub struct LedsDeviceProfile {
+    #[typiql(key)] pub id: String,
+    pub name: String,
+    pub car: Option<String>,
+    pub game: Option<String>,
+}
+
+/// Named profile for shift light configurations.
+#[typiql_type]
+pub struct ShiftLightProfile {
+    #[typiql(key)] pub id: String,
+    pub name: String,
+    pub car: Option<String>,
+    pub game: Option<String>,
+}
+
+/// Named profile for SimWind fan controller configurations.
+#[typiql_type]
+pub struct SimWindDeviceProfile {
+    #[typiql(key)] pub id: String,
+    pub name: String,
+    pub car: Option<String>,
+    pub game: Option<String>,
+}
+
+typiql_schema!(
+    MonocoqueSoundDevice, ShakerChannel, SoundDeviceProfile, ShakerDspChannel, LfeChannel,
+    MonocoqueLedsDevice, LedsDeviceProfile,
+    MonocoqueShiftLight, ShiftLightProfile,
+    MonocoqueSimWindDevice, SimWindDeviceProfile,
+    DashTemplate, ConnectedClient, DashGroup, KnownCar, DeviceDefault,
+    Car, File, NightMode, CarDashPan, PreviewCar, DashboardEntry;
+    AppConfigQuery, DashboardFileSyncQuery, BuiltinTemplatesQuery, CarPhotoSyncQuery, ShakerDspQuery, QueryRoot;
+    AppConfigMutation, DashboardFileUploadMutation, ClientsMutation, CarFileMutation, DashTemplateThumbnailMutation, DashboardMutation, GamepadMutation, ShakerDspMutation;
+    SubscriptionRoot
+);

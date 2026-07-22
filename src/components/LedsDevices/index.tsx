@@ -1,0 +1,101 @@
+import React, { useState } from 'react';
+import { Routes, Route, useParams, useNavigate } from 'react-router-dom';
+import ReactiveAdmin from '../../lib/typical-admin-fabric';
+import LedsDeviceList from '../Shakers/LedsDevices';
+import DeviceProfileSaveBar from '../shared/DeviceProfileSaveBar';
+import DeviceProfilesList from '../shared/DeviceProfilesList';
+import { getTheme } from '../../lib/denim/lib';
+import {
+  GET_PROFILES, ADD_PROFILE, REMOVE_PROFILE, PROFILE_CHANGED,
+  profileResultKey, addProfileResultKey, STORAGE_KEY,
+} from './Profiles/queries';
+import { GET_LEDS, CREATE_LEDS, REMOVE_LEDS, LEDS_CHANGED } from '../Shakers/LedsDevices/queries';
+import { LedsDeviceRec } from '../Shakers/LedsDevices/queries';
+
+const ENABLED_KEY = 'leds_enabled';
+
+function liveToInput(rec: LedsDeviceRec, profileId: string | null) {
+  return { devpath: rec.devpath, baud: rec.baud, numLeds: rec.numLeds, startLed: rec.startLed, endLed: rec.endLed, config: rec.config, profileId };
+}
+
+const profileSchema = {
+  list: { name: { label: 'Name' }, car: { label: 'Car' }, game: { label: 'Game' } },
+  new:  { name: { type: 'text', label: 'Name', required: true }, car: { type: 'text', label: 'Car (optional)' }, game: { type: 'text', label: 'Game (optional)' } },
+  show: { name: { label: 'Name' }, car: { label: 'Car' }, game: { label: 'Game' } },
+  edit: { name: { type: 'text', label: 'Name', required: true }, car: { type: 'text', label: 'Car (optional)' }, game: { type: 'text', label: 'Game (optional)' } },
+};
+const dispatcher = { list: GET_PROFILES, show: GET_PROFILES, new: ADD_PROFILE, edit: ADD_PROFILE, delete: REMOVE_PROFILE, subscribe: PROFILE_CHANGED };
+const name = { singular: 'LedsDeviceProfile', plural: 'LedsDeviceProfiles' };
+
+const ProfilesList: React.FC<any> = (props) => {
+  const [enabled] = useState(() => localStorage.getItem(ENABLED_KEY) !== 'false');
+  return (
+    <DeviceProfilesList
+      {...props}
+      getProfilesQuery={GET_PROFILES} addProfileMutation={ADD_PROFILE}
+      removeProfileMutation={REMOVE_PROFILE} profileChangedSubscription={PROFILE_CHANGED}
+      profilesResultKey={profileResultKey} addProfileResultKey={addProfileResultKey}
+      getDevicesQuery={GET_LEDS} createDeviceMutation={CREATE_LEDS}
+      removeDeviceMutation={REMOVE_LEDS} deviceChangedSubscription={LEDS_CHANGED}
+      devicesResultKey="getMonocoqueLedsDevices"
+      liveToInput={liveToInput}
+      defaultDevice={(profileId: string) => ({ ...{ devpath: '/dev/simdev0', baud: 115200, numLeds: 6, startLed: 0, endLed: 5, config: '~/.config/monocoque/rpms_and_flags.lua' }, profileId })}
+      storageKey={STORAGE_KEY}
+      enabled={enabled}
+    />
+  );
+};
+
+const ProfileEdit: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const theme = getTheme();
+  return (
+    <div style={{ color: theme.palette.neutralPrimary }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', background: theme.palette.neutralLight, borderBottom: `1px solid ${theme.palette.neutralTertiaryAlt}` }}>
+        <button onClick={() => navigate('/leds/profiles')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: theme.palette.themePrimary, fontSize: '0.875em', padding: 0 }}>← Profiles</button>
+        <span style={{ fontWeight: 600 }}>Edit Profile</span>
+      </div>
+      <div style={{ padding: 16 }}>
+        <LedsDeviceList profileId={id ?? null} />
+      </div>
+    </div>
+  );
+};
+
+const LedsMain: React.FC = () => {
+  const [enabled, setEnabled] = useState(() => localStorage.getItem(ENABLED_KEY) !== 'false');
+  const toggle = () => {
+    const next = !enabled;
+    setEnabled(next);
+    localStorage.setItem(ENABLED_KEY, String(next));
+  };
+  const theme = getTheme();
+  return (
+    <div>
+      <DeviceProfileSaveBar
+        addProfileMutation={ADD_PROFILE} getProfilesQuery={GET_PROFILES} addProfileResultKey={addProfileResultKey}
+        getDevicesQuery={GET_LEDS} createDeviceMutation={CREATE_LEDS} removeDeviceMutation={REMOVE_LEDS}
+        deviceChangedSubscription={LEDS_CHANGED} devicesResultKey="getMonocoqueLedsDevices"
+        liveToInput={(rec, pid) => liveToInput(rec, pid)} storageKey={STORAGE_KEY}
+      />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 16px', background: theme.palette.neutralLighterAlt, borderBottom: `1px solid ${theme.palette.neutralTertiaryAlt}` }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '0.85em', color: theme.palette.neutralPrimary }}>
+          <input type="checkbox" checked={enabled} onChange={toggle} />
+          LED Controllers enabled
+        </label>
+      </div>
+      <LedsDeviceList enabled={enabled} />
+    </div>
+  );
+};
+
+const LedsDevices: React.FC = () => (
+  <Routes>
+    <Route path="/profiles/:id/edit" element={<ProfileEdit />} />
+    <Route path="/profiles/*" element={<ReactiveAdmin dispatcher={dispatcher} name={name} schemaDefinition={profileSchema} components={{ list: ProfilesList }} />} />
+    <Route path="/*" element={<LedsMain />} />
+  </Routes>
+);
+
+export default LedsDevices;

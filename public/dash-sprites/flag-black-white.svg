@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <clipPath id="ci">
+      <rect x="4" y="4" width="92" height="92" rx="4"/>
+    </clipPath>
+  </defs>
+  <rect width="100" height="100" rx="6" fill="#1a1a1a"/>
+  <polygon points="4,4 96,4 4,96" fill="#ffffff" clip-path="url(#ci)"/>
+  <polygon points="96,4 96,96 4,96" fill="#000000" clip-path="url(#ci)"/>
+</svg>

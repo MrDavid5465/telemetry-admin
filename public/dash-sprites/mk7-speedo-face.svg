@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <defs>
+    <radialGradient id="speedoFace" cx="50%" cy="42%" r="55%">
+      <stop offset="0%" stop-color="#252525"/>
+      <stop offset="100%" stop-color="#0d0d0d"/>
+    </radialGradient>
+    <radialGradient id="hubGradS" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#555"/>
+      <stop offset="100%" stop-color="#222"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Chrome outer ring -->
+  <circle cx="200" cy="200" r="198" fill="#1c1c1c" stroke="#3e3e3e" stroke-width="5"/>
+  <circle cx="200" cy="200" r="193" fill="#111" stroke="#262626" stroke-width="1.5"/>
+
+  <!-- Face -->
+  <circle cx="200" cy="200" r="190" fill="url(#speedoFace)"/>
+
+  <!-- Subtle concentric rings -->
+  <circle cx="200" cy="200" r="180" fill="none" stroke="#1e1e1e" stroke-width="1"/>
+  <circle cx="200" cy="200" r="155" fill="none" stroke="#1e1e1e" stroke-width="1"/>
+
+  <!-- Track arc (270° sweep, r=166) -->
+  <path d="M 82.6 317.4 A 166 166 0 1 1 317.4 317.4"
+        fill="none" stroke="#1e1e1e" stroke-width="14" stroke-linecap="butt"/>
+
+  <!-- Major tick marks every 20 km/h (rot = 135 + v/260*270 - 270) -->
+  <!-- v=0: rot=-135 -->
+  <g transform="rotate(-135, 200, 200)"><line x1="200" y1="28" x2="200" y2="50" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/></g>
+  <!-- v=20: rot=-114.23 -->
+  <g transform="rotate(-114.23, 200, 200)"><line x1="200" y1="28" x2="200" y2="50" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/></g>
+  <!-- v=40: rot=-93.46 -->
+  <g transform="rotate(-93.46, 200, 200)"><line x1="200" y1="28" x2="200" y2="50" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/></g>
+  <!-- v=60: rot=-72.69 -->
+  <g transform="rotate(-72.69, 200, 200)"><line x1="200" y1="28" x2="200" y2="50" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/></g>
+  <!-- v=80: rot=-51.92 -->
+  <g transform="rotate(-51.92, 200, 200)"><line x1="200" y1="28" x2="200" y2="50" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/></g>
+  <!-- v=100: rot=-31.15 -->
+  <g transform="rotate(-31.15, 200, 200)"><line x1="200" y1="28" x2="200" y2="50" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/></g>
+  <!-- v=120: rot=-10.38 -->
+  <g transform="rotate(-10.38, 200, 200)"><line x1="200" y1="28" x2="200" y2="50" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/></g>
+  <!-- v=140: rot=10.38 -->
+  <g transform="rotate(10.38, 200, 200)"><line x1="200" y1="28" x2="200" y2="50" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/></g>
+  <!-- v=160: rot=31.15 -->
+  <g transform="rotate(31.15, 200, 200)"><line x1="200" y1="28" x2="200" y2="50" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/></g>
+  <!-- v=180: rot=51.92 -->
+  <g transform="rotate(51.92, 200, 200)"><line x1="200" y1="28" x2="200" y2="50" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/></g>
+  <!-- v=200: rot=72.69 -->
+  <g transform="rotate(72.69, 200, 200)"><line x1="200" y1="28" x2="200" y2="50" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/></g>
+  <!-- v=220: rot=93.46 -->
+  <g transform="rotate(93.46, 200, 200)"><line x1="200" y1="28" x2="200" y2="50" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/></g>
+  <!-- v=240: rot=114.23 -->
+  <g transform="rotate(114.23, 200, 200)"><line x1="200" y1="28" x2="200" y2="50" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/></g>
+  <!-- v=260: rot=135 -->
+  <g transform="rotate(135, 200, 200)"><line x1="200" y1="28" x2="200" y2="50" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/></g>
+
+  <!-- Minor tick marks every 10 km/h (not at major positions) -->
+  <g transform="rotate(-124.62, 200, 200)"><line x1="200" y1="28" x2="200" y2="38" stroke="#505050" stroke-width="1.5"/></g>
+  <g transform="rotate(-103.85, 200, 200)"><line x1="200" y1="28" x2="200" y2="38" stroke="#505050" stroke-width="1.5"/></g>
+  <g transform="rotate(-83.08, 200, 200)"><line x1="200" y1="28" x2="200" y2="38" stroke="#505050" stroke-width="1.5"/></g>
+  <g transform="rotate(-62.31, 200, 200)"><line x1="200" y1="28" x2="200" y2="38" stroke="#505050" stroke-width="1.5"/></g>
+  <g transform="rotate(-41.54, 200, 200)"><line x1="200" y1="28" x2="200" y2="38" stroke="#505050" stroke-width="1.5"/></g>
+  <g transform="rotate(-20.77, 200, 200)"><line x1="200" y1="28" x2="200" y2="38" stroke="#505050" stroke-width="1.5"/></g>
+  <g transform="rotate(0, 200, 200)"><line x1="200" y1="28" x2="200" y2="38" stroke="#505050" stroke-width="1.5"/></g>
+  <g transform="rotate(20.77, 200, 200)"><line x1="200" y1="28" x2="200" y2="38" stroke="#505050" stroke-width="1.5"/></g>
+  <g transform="rotate(41.54, 200, 200)"><line x1="200" y1="28" x2="200" y2="38" stroke="#505050" stroke-width="1.5"/></g>
+  <g transform="rotate(62.31, 200, 200)"><line x1="200" y1="28" x2="200" y2="38" stroke="#505050" stroke-width="1.5"/></g>
+  <g transform="rotate(83.08, 200, 200)"><line x1="200" y1="28" x2="200" y2="38" stroke="#505050" stroke-width="1.5"/></g>
+  <g transform="rotate(103.85, 200, 200)"><line x1="200" y1="28" x2="200" y2="38" stroke="#505050" stroke-width="1.5"/></g>
+  <g transform="rotate(124.62, 200, 200)"><line x1="200" y1="28" x2="200" y2="38" stroke="#505050" stroke-width="1.5"/></g>
+
+  <!-- Number labels every 20 km/h (r=118 from center) -->
+  <!-- v=20: angle=155.77°, (92.5, 248.6) -->
+  <text x="92.5" y="252.6" text-anchor="middle" dominant-baseline="middle" fill="#d0d0d0" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="300">20</text>
+  <!-- v=40: angle=176.54°, (82.2, 207.2) -->
+  <text x="82.2" y="211.2" text-anchor="middle" dominant-baseline="middle" fill="#d0d0d0" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="300">40</text>
+  <!-- v=60: angle=197.31°, (87.3, 165.1) -->
+  <text x="87.3" y="169.1" text-anchor="middle" dominant-baseline="middle" fill="#d0d0d0" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="300">60</text>
+  <!-- v=80: angle=218.08°, (107.1, 127.3) -->
+  <text x="107.1" y="131.3" text-anchor="middle" dominant-baseline="middle" fill="#d0d0d0" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="300">80</text>
+  <!-- v=100: angle=238.85°, (139.1, 99.0) -->
+  <text x="139.1" y="103.0" text-anchor="middle" dominant-baseline="middle" fill="#d0d0d0" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="300">100</text>
+  <!-- v=120: angle=259.62°, (178.5, 84.0) -->
+  <text x="178.5" y="88.0" text-anchor="middle" dominant-baseline="middle" fill="#d0d0d0" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="300">120</text>
+  <!-- v=140: angle=280.38°, (221.5, 84.0) -->
+  <text x="221.5" y="88.0" text-anchor="middle" dominant-baseline="middle" fill="#d0d0d0" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="300">140</text>
+  <!-- v=160: angle=301.15°, (260.9, 99.0) -->
+  <text x="260.9" y="103.0" text-anchor="middle" dominant-baseline="middle" fill="#d0d0d0" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="300">160</text>
+  <!-- v=180: angle=321.92°, (292.9, 127.3) -->
+  <text x="292.9" y="131.3" text-anchor="middle" dominant-baseline="middle" fill="#d0d0d0" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="300">180</text>
+  <!-- v=200: angle=342.69°, (312.7, 165.1) -->
+  <text x="312.7" y="169.1" text-anchor="middle" dominant-baseline="middle" fill="#d0d0d0" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="300">200</text>
+  <!-- v=220: angle=3.46°, (317.8, 207.1) -->
+  <text x="317.8" y="211.1" text-anchor="middle" dominant-baseline="middle" fill="#d0d0d0" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="300">220</text>
+  <!-- v=240: angle=24.23°, (307.5, 248.6) -->
+  <text x="307.5" y="252.6" text-anchor="middle" dominant-baseline="middle" fill="#d0d0d0" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="300">240</text>
+
+  <!-- km/h unit in center -->
+  <text x="200" y="235" text-anchor="middle" fill="#999" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="300">km/h</text>
+
+  <!-- Center hub -->
+  <circle cx="200" cy="200" r="26" fill="url(#hubGradS)" stroke="#444" stroke-width="1.5"/>
+  <circle cx="200" cy="200" r="7" fill="#888"/>
+  <circle cx="200" cy="200" r="4" fill="#333"/>
+</svg>

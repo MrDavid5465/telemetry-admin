@@ -1,0 +1,52 @@
+export default (fontSize: number = 1) => ({
+  palette: {
+    themePrimary: "#00a35e",
+    themeLighterAlt: "#000704",
+    themeLighter: "#001a0f",
+    themeLight: "#00311d",
+    themeTertiary: "#006239",
+    themeSecondary: "#009054",
+    themeDarkAlt: "#11ac6c",
+    themeDark: "#2cb97f",
+    themeDarker: "#5acc9c",
+    neutralLighterAlt: "#2b2b2b",
+    neutralLighter: "#333333",
+    neutralLight: "#414141",
+    neutralQuaternaryAlt: "#4a4a4a",
+    neutralQuaternary: "#515151",
+    neutralTertiaryAlt: "#6f6f6f",
+    neutralTertiary: "#c8c8c8",
+    neutralSecondary: "#d0d0d0",
+    neutralPrimaryAlt: "#dadada",
+    neutralPrimary: "#ffffff",
+    neutralDark: "#f4f4f4",
+    black: "#f8f8f8",
+    white: "#222222",
+    red: "#a52234",
+    yellow: "#ffc107",
+    green: "#00833e",
+    blue: "#4c6bb3"
+  },
+  fonts: {
+    tiny: { fontSize: Math.round(10 * fontSize) },
+    xSmall: { fontSize: Math.round(10 * fontSize) },
+    small: { fontSize: Math.round(12 * fontSize) },
+    smallPlus: { fontSize: Math.round(12 * fontSize) },
+    medium: { fontSize: Math.round(14 * fontSize) },
+    mediumPlus: { fontSize: Math.round(16 * fontSize) },
+    large: { fontSize: Math.round(18 * fontSize) },
+    xLarge: { fontSize: Math.round(20 * fontSize) },
+    xLargePlus: { fontSize: Math.round(24 * fontSize) },
+    xxLarge: { fontSize: Math.round(28 * fontSize) },
+    xxLargePlus: { fontSize: Math.round(32 * fontSize) },
+    superLarge: { fontSize: Math.round(42 * fontSize) },
+    mega: { fontSize: Math.round(68 * fontSize) }
+  },
+  spacing: {
+    s2: Math.round(4 * fontSize),
+    s1: Math.round(8 * fontSize),
+    m: Math.round(16 * fontSize),
+    l1: Math.round(20 * fontSize),
+    l2: Math.round(32 * fontSize)
+  }
+});

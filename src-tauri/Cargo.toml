@@ -1,0 +1,47 @@
+[workspace]
+members = [
+    ".",
+]
+
+[package]
+name = "typiql"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "typiql_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "6.0.0"
+regex = "1.12.3"
+axum = "0.8.9"
+tokio = "1.52.3"
+async-graphql = "7.2.1"
+async-graphql-axum = "7.2.1"
+tower = "0.5.3"
+tower-http = { version = "0.6.11", features = ["cors", "fs"] }
+tokio-stream = "0.1.18"
+futures-util = "0.3.32"
+http = "1.4.2"
+memmap2 = "0.9.10"
+dns-lookup = "3.0.1"
+base64 = "0.22"
+sha2 = "0.10"
+typiql = { path = "../../../typiql-rs/crates/typiql-core", package = "typiql-core" }
+typiql-adapter-json = { path = "../../../typiql-rs/crates/typiql-adapter-json" }
+evdev = "0.12"

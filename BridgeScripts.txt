@@ -1,0 +1,3 @@
+WINEFSYNC=1 WINEPREFIX=/mnt/Games/SteamLibrary/steamapps/compatdata/2399420/pfx /home/$USER/.steam/root/compatibilitytools.d/GE-Proton10-34-LMU-hid_fixes/files/bin/wine ~/.local/share/simracing/simshmbridge/assets/lmubridge.exe 
+WINEFSYNC=1 WINEPREFIX=/home/$USER/.steam/steam/steamapps/compatdata/244210/pfx /home/$USER/.steam/root/compatibilitytools.d/GE-Proton10-33/files/bin/wine ~/.local/share/simracing/simshmbridge/assets/acbridge.exe
+WINEFSYNC=1 WINEPREFIX=/home/$USER/.steam/steam/steamapps/compatdata/3058630/pfx /home/$USER/.steam/root/compatibilitytools.d/GE-Proton10-33/files/bin/wine ~/.local/share/simracing/simshmbridge/assets/acebridge.exe
