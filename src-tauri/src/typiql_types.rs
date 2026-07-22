@@ -307,6 +307,11 @@ pub struct KnownCar {
 /// be touched (relations key off `path`, never `id`). Deliberately general —
 /// not car-specific — so it can later back other stored-file needs (dashboard
 /// sprites, thumbnails, other 360s), which already have stable real paths.
+/// `mtime` (file modification time, unix seconds) lets sync_dashboard_files
+/// skip re-reading+re-hashing a file's full content when its mtime hasn't
+/// changed since the last sync — full-content hashing every file on every
+/// dashboard open was measured taking 5+ seconds for a folder with a few
+/// multi-MB 360 photos. `Option` because existing records predate this field.
 #[typiql_type]
 pub struct File {
     #[typiql(key)]
@@ -314,6 +319,7 @@ pub struct File {
     pub id: String,
     pub filename: String,
     pub url: String,
+    pub mtime: Option<i64>,
 }
 
 /// A physical car, optionally linked to one or more raw car identifiers as

@@ -115,29 +115,49 @@ impl DashboardFileSyncQuery {
                 .to_string();
             let url = format!("/dash-assets/{}/{}", dashboard_id, rel_path);
 
-            // Always recompute the hash so a file edited outside the app is
-            // picked up automatically — same rationale as sync_car_photos,
-            // just applied to a whole-directory walk instead of two fixed
-            // slots.
-            let hash = std::fs::read(&real_path)
-                .ok()
-                .map(|bytes| {
-                    use sha2::{Digest, Sha256};
-                    let mut hasher = Sha256::new();
-                    hasher.update(&bytes);
-                    format!("{:x}", hasher.finalize())
-                })
-                .unwrap_or_default();
+            let mtime = file_mtime_secs(&real_path);
+            let existing_record = existing.get(&path_str);
 
-            current.push(json!({ "path": path_str, "id": hash, "filename": filename, "url": url }));
+            // Re-reading and SHA-256-hashing every file's full content on every
+            // dashboard open used to take 5+ seconds for a folder with a few
+            // multi-MB 360 photos — that stall is what made the 360 viewer (or
+            // any sprite-dependent element) appear blank until it finished. A
+            // file's content can only change by being rewritten, which always
+            // bumps its mtime, so reuse the existing hash whenever mtime is
+            // present and unchanged; only fall back to a full read+hash for new
+            // files, files with no recorded mtime yet, or files that actually
+            // changed. This preserves "auto-detect files edited outside the
+            // app" exactly — nothing here weakens that guarantee.
+            let hash = match (existing_record, mtime) {
+                (Some(rec), Some(mt)) if rec.mtime == Some(mt) => rec.id.clone(),
+                _ => std::fs::read(&real_path)
+                    .ok()
+                    .map(|bytes| {
+                        use sha2::{Digest, Sha256};
+                        let mut hasher = Sha256::new();
+                        hasher.update(&bytes);
+                        format!("{:x}", hasher.finalize())
+                    })
+                    .unwrap_or_default(),
+            };
+
+            current.push(json!({ "path": path_str, "id": hash, "filename": filename, "url": url, "mtime": mtime }));
         }
 
         // Only write back if something actually changed — avoids a spurious
         // disk write (and .dashboard.json churn) on every dashboard open.
+        // Must compare mtime too, not just id: a record whose content hash is
+        // unchanged but whose mtime was just backfilled (e.g. the first sync
+        // after upgrading existing records to carry mtime) still needs to be
+        // persisted, or the fast path above never gets anything to compare
+        // against and every future sync falls back to a full re-hash forever.
         let existing_matches = existing.len() == current.len()
             && current.iter().all(|c| {
                 let path = c.get("path").and_then(Value::as_str).unwrap_or_default();
-                existing.get(path).map(|f| f.id == c.get("id").and_then(Value::as_str).unwrap_or_default()).unwrap_or(false)
+                existing.get(path).map(|f| {
+                    f.id == c.get("id").and_then(Value::as_str).unwrap_or_default()
+                        && f.mtime == c.get("mtime").and_then(Value::as_i64)
+                }).unwrap_or(false)
             });
         if !existing_matches {
             adapter.set_table(files_location(), current).await;
@@ -210,11 +230,12 @@ impl DashboardFileUploadMutation {
         let hash = format!("{:x}", hasher.finalize());
         let path_str = file_path.to_string_lossy().to_string();
         let url = format!("/dash-assets/{}/{}", dashboard_id, name);
+        let mtime = file_mtime_secs(&file_path);
 
         let files_location = Location::At { file: content_file(&entry.path), table: "files".to_string() };
         let mut rows = adapter.get_many(files_location.clone(), vec![]).await;
         rows.retain(|v| v.get("path").and_then(Value::as_str) != Some(path_str.as_str()));
-        let new_row = json!({ "path": path_str, "id": hash, "filename": name, "url": url });
+        let new_row = json!({ "path": path_str, "id": hash, "filename": name, "url": url, "mtime": mtime });
         rows.push(new_row.clone());
         adapter.set_table(files_location, rows).await;
 
@@ -351,6 +372,13 @@ fn mock_sprites_dir() -> PathBuf {
     { PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../public/dash-sprites")) }
     #[cfg(not(debug_assertions))]
     { PathBuf::from("dist/dash-sprites") }
+}
+
+/// A cheap `stat()`-only check (no content read) used to skip re-hashing a
+/// file's full content when nothing about it has changed since the last sync.
+fn file_mtime_secs(path: &Path) -> Option<i64> {
+    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+    modified.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs() as i64)
 }
 
 /// Expand a leading `~` to the current user's home directory.
