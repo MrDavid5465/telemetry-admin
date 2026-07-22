@@ -9,14 +9,13 @@ impl Default for AppConfig {
             .map(|p| p.join("dashboard-designer").to_string_lossy().to_string());
         AppConfig {
             settings: AppSettings {
-                theme: "darkpurple".into(),
+                theme: "dark-purple".into(),
                 font_size: 1.0,
-                launch_page: "shakers".into(),
+                launch_page: "telemetryadmin/default".into(),
                 device_map: None,
                 typiql_data_dir: default_data_dir,
                 steer_max_deg: None,
                 setup_complete: false,
-                telemetry_source: None,
                 gamepad_mappings: None,
                 shaker_dsp_enabled: false,
                 shaker_lfe_source_device: None,
@@ -28,6 +27,18 @@ impl Default for AppConfig {
 
 pub fn applications() -> Vec<AppEntry> {
     vec![
+        AppEntry {
+            name: "Telemetry Admin".into(),
+            path: "telemetryadmin".into(),
+            front_end: "TelemetryAdmin".into(),
+            default_route: "".into(),
+            links: vec![
+                AppLink { path: "dashboards".into(), text: "Dashboards".into() },
+                AppLink { path: "cars".into(), text: "Cars".into() },
+                AppLink { path: "groups".into(), text: "Groups".into() },
+                AppLink { path: "templates".into(), text: "Templates".into() },
+            ],
+        },
         AppEntry {
             name: "Shakers".into(),
             path: "shakers".into(),
@@ -62,18 +73,6 @@ pub fn applications() -> Vec<AppEntry> {
             default_route: "".into(),
             links: vec![
                 AppLink { path: "profiles".into(), text: "Profiles".into() },
-            ],
-        },
-        AppEntry {
-            name: "Telemetry Admin".into(),
-            path: "telemetryadmin".into(),
-            front_end: "TelemetryAdmin".into(),
-            default_route: "".into(),
-            links: vec![
-                AppLink { path: "dashboards".into(), text: "Dashboards".into() },
-                AppLink { path: "cars".into(), text: "Cars".into() },
-                AppLink { path: "groups".into(), text: "Groups".into() },
-                AppLink { path: "templates".into(), text: "Templates".into() },
             ],
         },
     ]

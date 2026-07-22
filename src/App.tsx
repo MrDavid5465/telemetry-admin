@@ -2,12 +2,8 @@ import React, { useEffect } from "react";
 import "./App.css";
 
 import Logo from "./Logo";
-import lightgreen from "./lib/light-green";
-import darkgreen from "./lib/dark-green";
-import lightpurple from "./lib/light-purple";
-import darkpurple from "./lib/dark-purple";
-import darkred from "./lib/dark-red"
-import { Link } from "react-router-dom";
+import { THEMES } from "./lib/themes";
+import { Link, Navigate } from "react-router-dom";
 import Denim, {
   getStyle as getDenimStyle,
 } from "./lib/denim";
@@ -65,10 +61,10 @@ const App: React.FC = () => {
             <Logo className={style.logoLink} {...props} />
           </Link>
         )}
-        RootComponent={() => <Shakers />}
+        RootComponent={() => <Navigate to="/telemetryadmin/default" replace />}
         Controls={TelemetryControls}
         components={{ Shakers, LedsDevices, ShiftLights, SimWindDevices, TelemetryAdmin }}
-        themes={{ default: darkred, darkred, lightgreen, darkgreen, lightpurple, darkpurple }}
+        themes={THEMES}
         />
     </>
   );
