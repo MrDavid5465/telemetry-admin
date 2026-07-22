@@ -43,7 +43,6 @@ const MY = gql`
         typiqlDataDir
         steerMaxDeg
         setupComplete
-        telemetrySource
         shakerDspEnabled
         shakerLfeSourceDevice
         shakerLfeLpfHz
@@ -64,7 +63,6 @@ const UPDATE_SETTINGS = gql`
         typiqlDataDir
         steerMaxDeg
         setupComplete
-        telemetrySource
         shakerDspEnabled
         shakerLfeSourceDevice
         shakerLfeLpfHz
@@ -91,7 +89,6 @@ export interface IUserSettingInput {
   typiqlDataDir?: string;
   steerMaxDeg?: number;
   setupComplete?: boolean;
-  telemetrySource?: string;
   gamepadMappings?: GamepadMapping[];
   shakerDspEnabled?: boolean;
   shakerLfeSourceDevice?: string;
@@ -105,7 +102,6 @@ export interface ISettings {
   typiqlDataDir?: string;
   steerMaxDeg?: number;
   setupComplete?: boolean;
-  telemetrySource?: string;
   gamepadMappings?: GamepadMapping[];
   shakerDspEnabled?: boolean;
   shakerLfeSourceDevice?: string;

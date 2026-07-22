@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Modal, useMutation, useQuery, Stack, getStyle } from '../lib';
-import { Pivot, PivotItem, Dropdown, getTheme } from '../../../lib';
+import { Pivot, PivotItem, getTheme } from '../../../lib';
 import { userSettings } from './schema';
+import { parseThemeKey, themeKey } from '../../../../themes';
 import dispatcher, { ISettings, GamepadMapping } from '../../../lib/queries';
 import { Form, PrimaryButton } from '../../../lib';
 import { getAppId } from '../../../../../graphql/client';
@@ -20,7 +21,6 @@ interface Props {
   isOpen: boolean;
   dismissModal: () => any;
   settings: Partial<ISettings>;
-  themes: any;
 }
 
 function relativeTime(lastSeen: string): string {
@@ -31,7 +31,7 @@ function relativeTime(lastSeen: string): string {
   return `${Math.floor(secs / 86400)}d ago`;
 }
 
-const Index: React.FC<Props> = ({ isOpen, dismissModal, settings, themes }) => {
+const Index: React.FC<Props> = ({ isOpen, dismissModal, settings }) => {
   const style = getStyle();
   const appId = getAppId();
 
@@ -47,7 +47,6 @@ const Index: React.FC<Props> = ({ isOpen, dismissModal, settings, themes }) => {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const [steerMaxDeg, setSteerMaxDeg] = useState<number>(settings.steerMaxDeg ?? 400);
-  const [telemetrySource, setTelemetrySource] = useState<string>(settings.telemetrySource ?? '');
   const [udevStatus, setUdevStatus] = useState<'unknown' | 'installed' | 'missing'>('unknown');
   const [udevWorking, setUdevWorking] = useState(false);
   const [udevMsg, setUdevMsg] = useState<string | null>(null);
@@ -98,10 +97,6 @@ const Index: React.FC<Props> = ({ isOpen, dismissModal, settings, themes }) => {
     }
   };
 
-  useEffect(() => {
-    if (settings.telemetrySource != null) setTelemetrySource(settings.telemetrySource);
-  }, [settings.telemetrySource]);
-
   // Local edit state: deviceName → { dash, group }
   const [localDefaults, setLocalDefaults] = useState<Record<string, { dash: string; group: string }>>({});
 
@@ -141,27 +136,30 @@ const Index: React.FC<Props> = ({ isOpen, dismissModal, settings, themes }) => {
   }, [deviceDefaultsData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dashOptions = [
-    { key: '', text: '(none)' },
-    ...dashboards.map(d => ({ key: d.name, text: d.name })),
+    { value: '', text: '(none)' },
+    ...dashboards.map(d => ({ value: d.name, text: d.name })),
   ];
 
   const groupOptions = [
-    { key: '', text: '(none)' },
-    ...groups.map(g => ({ key: g.name, text: g.name })),
+    { value: '', text: '(none)' },
+    ...groups.map(g => ({ value: g.name, text: g.name })),
   ];
 
-  function setDash(deviceName: string, dash: string) {
-    setLocalDefaults(prev => ({
-      ...prev,
-      [deviceName]: { dash, group: dash ? '' : (prev[deviceName]?.group ?? '') },
-    }));
-  }
-
-  function setGroup(deviceName: string, group: string) {
-    setLocalDefaults(prev => ({
-      ...prev,
-      [deviceName]: { dash: group ? '' : (prev[deviceName]?.dash ?? ''), group },
-    }));
+  // dash and group are mutually exclusive (either pick a specific dashboard,
+  // or a group whose members resolve their own) — whichever field the Form
+  // just reported as changed (vs. the last-known value for this device)
+  // wins, and clears the other.
+  function setDashGroup(deviceName: string, next: { dash: string; group: string }) {
+    setLocalDefaults(prev => {
+      const cur = prev[deviceName] ?? { dash: '', group: '' };
+      if (next.dash !== cur.dash) {
+        return { ...prev, [deviceName]: { dash: next.dash, group: next.dash ? '' : cur.group } };
+      }
+      if (next.group !== cur.group) {
+        return { ...prev, [deviceName]: { dash: next.group ? '' : cur.dash, group: next.group } };
+      }
+      return prev;
+    });
   }
 
   async function upsertDefault(deviceName: string, dash: string | null, group: string | null) {
@@ -181,7 +179,7 @@ const Index: React.FC<Props> = ({ isOpen, dismissModal, settings, themes }) => {
     setSaveError(null);
 
     try {
-      await updateSettings({ variables: { settings: { ...generalValues, steerMaxDeg, telemetrySource: telemetrySource || undefined, gamepadMappings } } });
+      await updateSettings({ variables: { settings: { ...generalValues, steerMaxDeg, gamepadMappings } } });
 
       // Collect all device names that need a record: global default + all devices in the name map
       const allNames = new Set(['default', ...Object.values(deviceMap)]);
@@ -215,35 +213,33 @@ const Index: React.FC<Props> = ({ isOpen, dismissModal, settings, themes }) => {
         <span id={'title'}>Settings</span>
       </Stack>
       <Stack className={style.modalBody}>
+        {/* Fixed size so the dialog doesn't visibly resize switching between a
+            sparse tab (Gamepad) and a dense one (Dashboards) — sized to comfortably
+            fit the largest tab's content, with its own scroll for anything that
+            still overflows (e.g. Clients with many connected devices). Width in
+            particular matters here: without a cap, the Controller tab's flex:1
+            range input has nothing to constrain it and blows the whole dialog
+            out to almost double the width of every other tab. */}
+        <div style={{ height: '43.75em', width: '34em', overflowY: 'auto' }}>
         <Pivot>
           <PivotItem headerText="General">
             {settings && (
               <Stack tokens={{ childrenGap: '0.77em' }} style={{ paddingTop: '0.77em' }}>
                 <Form
-                  form={userSettings(themes, settings.deviceMap as Record<string, string>)}
+                  form={userSettings(settings.deviceMap as Record<string, string>)}
                   name={'userSettings'}
-                  initialValues={{ ...settings, deviceMap: currentName }}
+                  initialValues={{
+                    ...settings,
+                    deviceMap: currentName,
+                    themeMode: parseThemeKey(settings.theme).mode,
+                    themeColor: parseThemeKey(settings.theme).color,
+                  }}
                   onChange={(_name: string, { clean, isValid }: any) => {
-                    setGeneralValues(clean);
+                    const { themeColor, themeMode, ...rest } = clean;
+                    setGeneralValues({ ...rest, theme: themeKey(themeMode, themeColor) });
                     setGeneralValid(isValid);
                   }}
                 />
-                <Stack tokens={{ childrenGap: 4 }}>
-                  <label style={{ fontSize: '0.85em', fontWeight: 600 }}>Telemetry Source</label>
-                  <select
-                    value={telemetrySource}
-                    onChange={e => setTelemetrySource(e.target.value)}
-                    style={{ padding: '4px 8px' }}
-                  >
-                    <option value="">— not set —</option>
-                    <option value="ACC">Assetto Corsa Competizione</option>
-                    <option value="AC">Assetto Corsa</option>
-                    <option value="iRacing">iRacing</option>
-                    <option value="rFactor2">rFactor 2</option>
-                    <option value="AMS2">Automobilista 2</option>
-                    <option value="RBR">Richard Burns Rally</option>
-                  </select>
-                </Stack>
               </Stack>
             )}
           </PivotItem>
@@ -251,11 +247,12 @@ const Index: React.FC<Props> = ({ isOpen, dismissModal, settings, themes }) => {
           <PivotItem headerText="Dashboards">
             <Stack tokens={{ childrenGap: '1em' }} style={{ paddingTop: '0.77em' }}>
               {/* ── Global default ────────────────────────────────────── */}
-              <Dropdown
-                label="Default dashboard"
-                selectedKey={localDefaults['default']?.dash ?? ''}
-                options={dashOptions}
-                onChange={(_e, opt) => setDash('default', (opt?.key as string) ?? '')}
+              <Form
+                key={`default-${localDefaults['default']?.dash ?? ''}`}
+                form={{ dash: { type: 'select', label: 'Default dashboard', options: dashOptions } }}
+                name="defaultDashboard"
+                initialValues={{ dash: localDefaults['default']?.dash ?? '' }}
+                onChange={(_n: string, { clean }: any) => setDashGroup('default', { dash: clean.dash, group: '' })}
               />
 
               {/* ── This device ───────────────────────────────────────── */}
@@ -265,19 +262,18 @@ const Index: React.FC<Props> = ({ isOpen, dismissModal, settings, themes }) => {
                   <span style={{ fontSize: '0.78em', opacity: 0.5 }}>Set a device name in General to configure defaults for this device.</span>
                 ) : (
                   <Stack horizontal tokens={{ childrenGap: 8 }}>
-                    <Dropdown
-                      label="Dashboard override"
-                      selectedKey={localDefaults[currentName]?.dash ?? ''}
-                      options={dashOptions}
-                      onChange={(_e, opt) => setDash(currentName, (opt?.key as string) ?? '')}
-                      styles={{ root: { flex: 1 } }}
-                    />
-                    <Dropdown
-                      label="Group (vehicle-specific)"
-                      selectedKey={localDefaults[currentName]?.group ?? ''}
-                      options={groupOptions}
-                      onChange={(_e, opt) => setGroup(currentName, (opt?.key as string) ?? '')}
-                      styles={{ root: { flex: 1 } }}
+                    <Form
+                      key={`device-${currentName}-${localDefaults[currentName]?.dash ?? ''}-${localDefaults[currentName]?.group ?? ''}`}
+                      form={{
+                        dash: { type: 'select', label: 'Dashboard override', options: dashOptions, styles: { root: { flex: 1 } } },
+                        group: { type: 'select', label: 'Group (vehicle-specific)', options: groupOptions, styles: { root: { flex: 1 } } },
+                      }}
+                      name="thisDeviceDefault"
+                      initialValues={{
+                        dash: localDefaults[currentName]?.dash ?? '',
+                        group: localDefaults[currentName]?.group ?? '',
+                      }}
+                      onChange={(_n: string, { clean }: any) => setDashGroup(currentName, clean)}
                     />
                   </Stack>
                 )}
@@ -297,19 +293,18 @@ const Index: React.FC<Props> = ({ isOpen, dismissModal, settings, themes }) => {
                         <span style={{ fontSize: '0.75em', opacity: 0.45 }}>No name set</span>
                       ) : (
                         <Stack horizontal tokens={{ childrenGap: 8 }}>
-                          <Dropdown
-                            selectedKey={localDefaults[devName]?.dash ?? ''}
-                            options={dashOptions}
-                            placeholder="Dashboard override"
-                            onChange={(_e, opt) => setDash(devName, (opt?.key as string) ?? '')}
-                            styles={{ root: { flex: 1 } }}
-                          />
-                          <Dropdown
-                            selectedKey={localDefaults[devName]?.group ?? ''}
-                            options={groupOptions}
-                            placeholder="Group override"
-                            onChange={(_e, opt) => setGroup(devName, (opt?.key as string) ?? '')}
-                            styles={{ root: { flex: 1 } }}
+                          <Form
+                            key={`devrow-${devName}-${localDefaults[devName]?.dash ?? ''}-${localDefaults[devName]?.group ?? ''}`}
+                            form={{
+                              dash: { type: 'select', placeholder: 'Dashboard override', options: dashOptions, styles: { root: { flex: 1 } } },
+                              group: { type: 'select', placeholder: 'Group override', options: groupOptions, styles: { root: { flex: 1 } } },
+                            }}
+                            name={`deviceDefault-${devName}`}
+                            initialValues={{
+                              dash: localDefaults[devName]?.dash ?? '',
+                              group: localDefaults[devName]?.group ?? '',
+                            }}
+                            onChange={(_n: string, { clean }: any) => setDashGroup(devName, clean)}
                           />
                         </Stack>
                       )}
@@ -323,32 +318,16 @@ const Index: React.FC<Props> = ({ isOpen, dismissModal, settings, themes }) => {
           <PivotItem headerText="Controller">
             <Stack tokens={{ childrenGap: '1em' }} style={{ paddingTop: '0.77em' }}>
               <Stack>
-                <label style={{ fontSize: '0.85em', fontWeight: 600, marginBottom: 4 }}>
-                  Steering wheel total rotation (degrees)
-                </label>
                 <span style={{ fontSize: '0.78em', opacity: 0.65, marginBottom: 8 }}>
                   Total lock-to-lock degrees for your steering wheel. For example, enter 900 for a 900° wheel. The sim returns a normalised ±1.0 value — the app halves this to get per-side degrees for counter-rotation.
                 </span>
-                <Stack horizontal verticalAlign="center" tokens={{ childrenGap: 8 }}>
-                  <input
-                    type="range"
-                    min={90} max={1440} step={10}
-                    value={steerMaxDeg}
-                    onChange={e => setSteerMaxDeg(Number(e.target.value))}
-                    style={{ flex: 1, accentColor: getTheme().palette.themePrimary, cursor: 'pointer' }}
-                  />
-                  <input
-                    type="number"
-                    min={90} max={1440} step={10}
-                    value={steerMaxDeg}
-                    onChange={e => {
-                      const v = parseInt(e.target.value, 10);
-                      if (!isNaN(v)) setSteerMaxDeg(Math.max(90, Math.min(1440, v)));
-                    }}
-                    style={{ width: 60, textAlign: 'right' }}
-                  />
-                  <span style={{ fontSize: '0.8em', opacity: 0.6 }}>°</span>
-                </Stack>
+                <Form
+                  key={`steerMaxDeg-${settings.steerMaxDeg ?? 'default'}`}
+                  form={{ steerMaxDeg: { type: 'slider', label: 'Steering wheel total rotation (degrees)', min: 90, max: 1440, step: 10 } }}
+                  name="controllerSettings"
+                  initialValues={{ steerMaxDeg }}
+                  onChange={(_n: string, { clean }: any) => setSteerMaxDeg(clean.steerMaxDeg)}
+                />
               </Stack>
               <Stack>
                 <span style={{ fontSize: '0.82em', opacity: 0.6 }}>
@@ -558,6 +537,7 @@ const Index: React.FC<Props> = ({ isOpen, dismissModal, settings, themes }) => {
             </Stack>
           </PivotItem>
         </Pivot>
+        </div>
 
         <Stack horizontal verticalAlign="center" tokens={{ childrenGap: '0.77em' }} style={{ paddingTop: '1em' }}>
           <PrimaryButton onClick={handleSave}>Save</PrimaryButton>

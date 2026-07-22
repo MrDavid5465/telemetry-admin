@@ -58,7 +58,6 @@ pub struct GqlAppSettings {
     /// as the per-side degrees.
     pub steer_max_deg: Option<f64>,
     pub setup_complete: bool,
-    pub telemetry_source: Option<String>,
     pub gamepad_mappings: Option<Vec<GqlGamepadMapping>>,
     /// Whether shaker rows are currently pointed at the DSP virtual sink
     /// (see graphql/shaker_dsp.rs's enable/disableShakerDsp). Global, not
@@ -120,7 +119,6 @@ pub struct AppSettingsInput {
     pub typiql_data_dir: MaybeUndefined<String>,
     pub steer_max_deg: MaybeUndefined<f64>,
     pub setup_complete: MaybeUndefined<bool>,
-    pub telemetry_source: MaybeUndefined<String>,
     pub gamepad_mappings: MaybeUndefined<Vec<GamepadMappingInput>>,
     pub shaker_dsp_enabled: MaybeUndefined<bool>,
     pub shaker_lfe_source_device: MaybeUndefined<String>,
@@ -158,8 +156,6 @@ pub struct AppSettings {
     pub steer_max_deg: Option<f64>,
     #[serde(default)]
     pub setup_complete: bool,
-    #[serde(default)]
-    pub telemetry_source: Option<String>,
     #[serde(default)]
     pub gamepad_mappings: Option<Vec<GamepadMapping>>,
     #[serde(default)]

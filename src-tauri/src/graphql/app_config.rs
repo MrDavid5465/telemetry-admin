@@ -61,7 +61,6 @@ impl AppConfigMutation {
                 typiql_data_dir: merge_optional(s.typiql_data_dir, existing.settings.typiql_data_dir),
                 steer_max_deg: merge_optional(s.steer_max_deg, existing.settings.steer_max_deg),
                 setup_complete: merge_required(s.setup_complete, existing.settings.setup_complete),
-                telemetry_source: merge_optional(s.telemetry_source, existing.settings.telemetry_source),
                 gamepad_mappings: match s.gamepad_mappings {
                     MaybeUndefined::Undefined => existing.settings.gamepad_mappings,
                     MaybeUndefined::Null => None,

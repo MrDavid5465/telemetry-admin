@@ -64,7 +64,6 @@ pub fn to_gql_settings(s: AppSettings) -> GqlAppSettings {
         typiql_data_dir: s.typiql_data_dir.clone(),
         steer_max_deg: s.steer_max_deg,
         setup_complete: s.setup_complete,
-        telemetry_source: s.telemetry_source.clone(),
         gamepad_mappings: s.gamepad_mappings.map(|ms| {
             ms.into_iter().map(|m| GqlGamepadMapping {
                 id: m.id,
