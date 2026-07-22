@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback } from 'react';
 import * as THREE from 'three';
 
 export interface Photo360Handle {
@@ -47,6 +47,7 @@ const Photo360Viewer = forwardRef<Photo360Handle, Props>(({
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef   = useRef<THREE.PerspectiveCamera | null>(null);
   const sceneRef    = useRef<THREE.Scene | null>(null);
+  const materialRef = useRef<THREE.MeshBasicMaterial | null>(null);
   const stateRef    = useRef({ yaw, pitch, fov, roll, displayWidth, displayHeight });
   stateRef.current  = { yaw, pitch, fov, roll, displayWidth, displayHeight };
   const dragRef     = useRef<{ startX: number; startY: number; startYaw: number; startPitch: number } | null>(null);
@@ -55,7 +56,23 @@ const Photo360Viewer = forwardRef<Photo360Handle, Props>(({
   telemetryRef.current = telemetryData;
   const swayConfigRef = useRef({ swayEnabled, swayGainX, swayGainY, swayDisableX, swayDisableY });
   swayConfigRef.current = { swayEnabled, swayGainX, swayGainY, swayDisableX, swayDisableY };
+  const onLoadedRef = useRef(onLoaded);
+  onLoadedRef.current = onLoaded;
+  // Bumped once the GL-setup effect below acquires a context. The
+  // texture-loading effect depends on this (not just photoUrl) so it can
+  // pick up the material once it exists.
+  const [glGeneration, setGlGeneration] = useState(0);
 
+  // GL setup — deliberately mount-once (NOT keyed on photoUrl). A WebGLRenderer
+  // holds a real, browser-capped GPU resource (commonly ~16 simultaneous live
+  // contexts, fewer on weak GPUs). Recreating one on every photo change used to
+  // race a teardown against a create, rendering blank/grey. That raced on
+  // *every* mount, not just repeated navigation: GET_CARS uses cache-and-network,
+  // so dayPhoto360Url/nightPhoto360Url reliably change once from a cache-miss
+  // placeholder to the real car photo moments after mount. Splitting texture
+  // loading (below) from GL setup (here) means a photoUrl change just swaps
+  // the material's texture on the existing context — no teardown, no race —
+  // and a live car swap mid-session won't glitch either.
   useEffect(() => {
     if (!mountRef.current) return;
 
@@ -74,11 +91,14 @@ const Photo360Viewer = forwardRef<Photo360Handle, Props>(({
     const geometry = new THREE.SphereGeometry(50, 64, 32);
     geometry.scale(-1, 1, 1);
 
-    const texture = new THREE.TextureLoader().load(photoUrl, () => onLoaded?.());
-    texture.colorSpace = THREE.SRGBColorSpace;
-    const material = new THREE.MeshBasicMaterial({ map: texture });
+    // No map yet — the texture-loading effect below assigns one
+    // synchronously in the same effect-flush, before the first
+    // requestAnimationFrame paints.
+    const material = new THREE.MeshBasicMaterial();
+    materialRef.current = material;
     const sphere = new THREE.Mesh(geometry, material);
     scene.add(sphere);
+    setGlGeneration(g => g + 1);
 
     let rafId: number;
     const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -87,20 +107,22 @@ const Photo360Viewer = forwardRef<Photo360Handle, Props>(({
     let lastHeight = displayHeight;
     const render = () => {
       rafId = requestAnimationFrame(render);
-      // Skip actual render work while this tab is backgrounded. Two or more
-      // tabs each running a continuous WebGL render loop (e.g. a kiosk tab and
-      // this car's own live-preview tab) compete for main-thread time even
-      // though only one is visible — that contention has been observed to
-      // starve the *other* tab's React state updates badly enough that CSS
-      // transitions (the day/night crossfade) appear to snap instead of fade.
-      // requestAnimationFrame itself is still called every frame so rendering
-      // resumes immediately on refocus, with no extra listener needed.
+      // Skip actual render work while this tab is backgrounded. Two or
+      // more tabs each running a continuous WebGL render loop (e.g. a
+      // kiosk tab and this car's own live-preview tab) compete for
+      // main-thread time even though only one is visible — that
+      // contention has been observed to starve the *other* tab's React
+      // state updates badly enough that CSS transitions (the day/night
+      // crossfade) appear to snap instead of fade. requestAnimationFrame
+      // itself is still called every frame so rendering resumes
+      // immediately on refocus, with no extra listener needed.
       if (document.hidden) return;
       const { yaw: y, pitch: p, fov: f, roll: r, displayWidth: dw, displayHeight: dh } = stateRef.current;
 
-      // displayWidth/displayHeight can change after mount (e.g. a responsive
-      // container being resized) — the renderer's own canvas size only tracks
-      // them via this check, since the mount effect only runs once per photoUrl.
+      // displayWidth/displayHeight can change after mount (e.g. a
+      // responsive container being resized) — the renderer's own canvas
+      // size only tracks them via this check, since this GL-setup effect
+      // only runs once per component instance (not on every prop change).
       if (dw !== lastWidth || dh !== lastHeight) {
         lastWidth = dw;
         lastHeight = dh;
@@ -132,28 +154,43 @@ const Photo360Viewer = forwardRef<Photo360Handle, Props>(({
 
     return () => {
       cancelAnimationFrame(rafId);
-      texture.dispose();
       material.dispose();
       geometry.dispose();
       renderer.dispose();
-      // renderer.dispose() alone frees Three.js-level GPU resources but leaves
-      // the underlying WebGLRenderingContext itself alive until the canvas is
-      // garbage collected — not deterministic, and browsers cap the number of
-      // *simultaneously live* WebGL contexts (commonly ~16, lower on weaker
-      // GPUs). This component doubles the contexts a 360 viewer needs during
-      // a day/night crossfade (one per photo layer); without forcing context
-      // loss here, repeated navigations/remounts (a photoUrl change always
-      // remounts, so does re-navigating to a kiosk page) can exhaust that
-      // limit before GC catches up — new contexts then silently fail to
-      // acquire, rendering as a flat grey canvas. Matches the intermittent
-      // "every other refresh" pattern reported on constrained kiosk hardware.
-      const loseContextExt = renderer.getContext().getExtension('WEBGL_lose_context');
-      loseContextExt?.loseContext();
       if (mountRef.current?.contains(renderer.domElement)) {
         mountRef.current.removeChild(renderer.domElement);
       }
+      rendererRef.current = null;
+      sceneRef.current = null;
+      cameraRef.current = null;
+      materialRef.current = null;
     };
-  }, [photoUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Texture loading — swaps the existing material's map in place rather than
+  // recreating the WebGL context (see the GL-setup effect above). Runs
+  // whenever photoUrl actually changes, including the cache-miss-placeholder
+  // -> real-photo transition that used to trigger a full context teardown.
+  // Also depends on glGeneration in case this effect first runs before GL
+  // setup has created a material.
+  useEffect(() => {
+    const material = materialRef.current;
+    if (!material) return;
+
+    let cancelled = false;
+    const texture = new THREE.TextureLoader().load(photoUrl, () => {
+      if (!cancelled) onLoadedRef.current?.();
+    });
+    texture.colorSpace = THREE.SRGBColorSpace;
+    material.map = texture;
+    material.needsUpdate = true;
+
+    return () => {
+      cancelled = true;
+      texture.dispose();
+    };
+  }, [photoUrl, glGeneration]);
 
   useImperativeHandle(ref, () => ({
     capture: async (captureWidth: number, captureHeight: number): Promise<string> => {

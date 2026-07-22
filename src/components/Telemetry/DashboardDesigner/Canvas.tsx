@@ -1175,11 +1175,9 @@ const Canvas = forwardRef<CanvasHandle, Props>(({
       if (!containerRef.current) return;
       const { clientWidth, clientHeight } = containerRef.current;
       const s = Math.min(clientWidth / dashboard.canvasWidth, clientHeight / dashboard.canvasHeight);
-      setView({
-        scale: s,
-        offsetX: Math.round((clientWidth  - dashboard.canvasWidth  * s) / 2),
-        offsetY: Math.round((clientHeight - dashboard.canvasHeight * s) / 2),
-      });
+      const offsetX = Math.round((clientWidth  - dashboard.canvasWidth  * s) / 2);
+      const offsetY = Math.round((clientHeight - dashboard.canvasHeight * s) / 2);
+      setView({ scale: s, offsetX, offsetY });
     };
     compute();
     const ro = new ResizeObserver(compute);
@@ -1273,7 +1271,7 @@ const Canvas = forwardRef<CanvasHandle, Props>(({
   return (
     <div
       ref={containerRef}
-      style={{ width: '100%', height: '100%', background: '#111', position: 'relative', overflow: 'hidden' }}
+      style={{ width: '100%', height: '100%', background: '#111', position: 'relative', overflow: 'hidden', isolation: 'isolate' }}
       onClick={() => onSelect(null)}
     >
       <div
