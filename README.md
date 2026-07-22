@@ -1,4 +1,4 @@
-# typiql-tauri
+# telemetry-admin
 
 A desktop app (Tauri + React/TypeScript frontend, Rust/Axum/GraphQL backend) for
 building live sim-racing dashboards and controlling a physical shaker rig.

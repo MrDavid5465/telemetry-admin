@@ -1,5 +1,5 @@
 {
-  "name": "typiql",
+  "name": "telemetry-admin",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -18,7 +18,7 @@
     "@apollo/react-components": "^4.0.0",
     "@apollo/react-hooks": "^4.0.0",
     "@fluentui/react": "^8.125.6",
-    "@octant/per-form": "^0.2.1",
+    "@octant/per-form": "github:MrDavid5465/per-form#master",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "@types/react-router": "^5.1.20",
