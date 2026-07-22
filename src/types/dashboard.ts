@@ -100,6 +100,12 @@ export interface ComponentNode {
   showValue?: boolean;
   borderRadius?: number;
   segments?: number;
+  // Optional: drive the colorLow/Mid/High gradient from a different telemetry
+  // field than the one that drives fill level (binding.field). Falls back to
+  // binding's own field/range when unset, matching pre-existing behaviour.
+  colorField?: string;
+  colorInputMin?: number;
+  colorInputMax?: number;
 
   // --- flag-display (plain coloured LED/grid) ---
   gridCols?: number;

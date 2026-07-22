@@ -22,6 +22,28 @@ export function deepCopyNode(node: ComponentNode): ComponentNode {
   };
 }
 
+// Every ComponentNode field that holds a bare sprite filename (not a File
+// relation). Used to figure out what a template needs copied into a
+// dashboard's own folder before it will render.
+const FILE_FIELDS: (keyof ComponentNode)[] = [
+  'file', 'nightFile', 'backgroundFile',
+  'fileGreen', 'fileYellow', 'fileRed', 'fileBlue', 'fileWhite', 'fileChequered',
+  'fileBlack', 'fileBlackWhite', 'fileBlackOrange', 'fileOrange', 'fileInPit', 'fileOff',
+  'ctrlOffFile', 'ctrlOnFile', 'ctrlPressedFile',
+  'sliderThumbFile', 'encoderKnobFile', 'encoderBtnOnFile', 'encoderBtnOffFile',
+];
+
+export function collectFileRefs(node: ComponentNode): string[] {
+  const files = new Set<string>();
+  for (const n of flattenNodes([node])) {
+    for (const field of FILE_FIELDS) {
+      const val = n[field];
+      if (typeof val === 'string' && val) files.add(val);
+    }
+  }
+  return [...files];
+}
+
 export function isDescendantOf(nodes: ComponentNode[], ancestorId: string, candidateId: string): boolean {
   const ancestor = findNodeById(nodes, ancestorId);
   if (!ancestor?.children?.length) return false;

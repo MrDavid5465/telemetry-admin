@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useCallback, forwardRef, useImperat
 import { DashboardConfig, ComponentNode } from '../../../types/dashboard';
 import { GamepadMapping } from '../../../lib/denim/lib/queries';
 import { findNodeById } from './components/utils';
-import { applyBinding, formatValue, fillFraction, computeRotation, scaleNode } from './canvasUtils';
+import { applyBinding, formatValue, fillFraction, colorFraction, computeRotation, scaleNode } from './canvasUtils';
 import GifGaugeNode from './GifGaugeNode';
 import ArcGaugeFaceNode from './ArcGaugeFaceNode';
 import { useGamepadIO, useHeldGamepadButton } from './useGamepadIO';
@@ -769,6 +769,7 @@ const NodeRenderer: React.FC<NodeRendererProps> = ({
   // ── graph-bar-gauge ──
   if (node.type === 'graph-bar-gauge') {
     const frac = fillFraction(node, telemetryData);
+    const cfrac = colorFraction(node, telemetryData);
     const w = node.width ?? 200;
     const h = node.height ?? 24;
     const gt = node.graphType ?? 'h-bar';
@@ -784,8 +785,8 @@ const NodeRenderer: React.FC<NodeRendererProps> = ({
     const mid = node.colorMid;
     const hi = node.colorHigh ?? '#cc2200';
     const fillColor = mid
-      ? (frac < 0.5 ? lerp(lo, mid, frac * 2) : lerp(mid, hi, (frac - 0.5) * 2))
-      : lerp(lo, hi, frac);
+      ? (cfrac < 0.5 ? lerp(lo, mid, cfrac * 2) : lerp(mid, hi, (cfrac - 0.5) * 2))
+      : lerp(lo, hi, cfrac);
 
     const rawVal = applyBinding(node, telemetryData);
     const display = formatValue(rawVal, node.format ?? 'integer');

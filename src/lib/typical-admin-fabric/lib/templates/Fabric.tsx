@@ -109,6 +109,7 @@ const TELEMETRY_BINDING_FIELDS = [
   'rpm', 'speed', 'gear', 'throttle', 'brake', 'clutch', 'steering',
   'gLat', 'gLon', 'gVert', 'fuel', 'turboBoost',
   'tyreTempFl', 'tyreTempFr', 'tyreTempRl', 'tyreTempRr',
+  'tyreWearFl', 'tyreWearFr', 'tyreWearRl', 'tyreWearRr',
 ];
 
 // Value shape: { field, inputMin, inputMax, outputMin, outputMax, influence?:

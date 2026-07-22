@@ -17,6 +17,9 @@ export interface LiveTelemetryData {
   simStatus: string;
 }
 
+// Corner order for the `tyres` array, per src-tauri/src/telemetry/types.rs: [FL, FR, RL, RR].
+const TYRE_CORNERS = ['Fl', 'Fr', 'Rl', 'Rr'] as const;
+
 export function computeTelemetryValues(t: any): LiveTelemetryData {
   const values: Record<string, number> = {};
   if (t) {
@@ -26,6 +29,14 @@ export function computeTelemetryValues(t: any): LiveTelemetryData {
     if (typeof t.courseFlag === 'string') values['courseFlag'] = COURSE_FLAG_MAP[t.courseFlag] ?? 0;
     if (typeof t.inPit === 'boolean') values['inPit'] = t.inPit ? 1 : 0;
     if (typeof t.lapIsValid === 'boolean') values['lapIsValid'] = t.lapIsValid ? 1 : 0;
+    if (Array.isArray(t.tyres)) {
+      t.tyres.forEach((tyre: any, i: number) => {
+        const corner = TYRE_CORNERS[i];
+        if (!corner || !tyre) return;
+        if (typeof tyre.temp === 'number') values[`tyreTemp${corner}`] = tyre.temp;
+        if (typeof tyre.wear === 'number') values[`tyreWear${corner}`] = tyre.wear;
+      });
+    }
   }
   const simStatus = t?.simStatus ?? '';
   return { values, car: t?.car ?? '', simStatus: SIM_STATUS_MAP[simStatus] ?? simStatus };

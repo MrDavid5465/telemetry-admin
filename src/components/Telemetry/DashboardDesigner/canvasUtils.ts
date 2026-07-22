@@ -32,6 +32,18 @@ export function fillFraction(node: ComponentNode, data: Record<string, number>):
   return Math.max(0, Math.min(1, (raw - inputMin) / (inputMax - inputMin)));
 }
 
+// Fraction driving the colorLow/Mid/High gradient, independent of fillFraction
+// (fill level) when colorField is set — e.g. a tire widget where fill level
+// tracks wear but colour tracks temperature. Falls back to fillFraction when
+// colorField is absent, preserving existing single-binding gauges.
+export function colorFraction(node: ComponentNode, data: Record<string, number>): number {
+  if (!node.colorField) return fillFraction(node, data);
+  const inputMin = node.colorInputMin ?? 0;
+  const inputMax = node.colorInputMax ?? 100;
+  const raw = data[node.colorField] ?? inputMin;
+  return Math.max(0, Math.min(1, (raw - inputMin) / (inputMax - inputMin)));
+}
+
 export function computeRotation(node: ComponentNode, data: Record<string, number>): number | undefined {
   if (node.type !== 'needle-gauge' || !node.binding) return undefined;
   const { field, inputMin, inputMax, outputMin, outputMax } = node.binding;

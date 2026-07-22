@@ -29,6 +29,12 @@ export const graphBarGaugeSchema: ComponentSchema = {
     segments:        { label: 'Segments (LED mode)', type: 'slider', min: 2, max: 64, section: 'Appearance' },
     showValue:       { label: 'Show value label', type: 'checkbox', section: 'Appearance' },
     binding: { label: 'Telemetry binding', type: 'telemetry-binding', section: 'Telemetry' },
+    // Optional: drive the colour gradient from a different field than fill
+    // level (e.g. a tire widget where height tracks wear but colour tracks
+    // temp). Leave colorField blank to use the binding above for both, as before.
+    colorField:    { label: 'Colour field (optional)', type: 'text', section: 'Telemetry' },
+    colorInputMin: { label: 'Colour field min', type: 'slider', min: -99999, max: 99999, section: 'Telemetry' },
+    colorInputMax: { label: 'Colour field max', type: 'slider', min: -99999, max: 99999, section: 'Telemetry' },
     ...COUNTER_ROTATE_FIELDS,
   },
 };

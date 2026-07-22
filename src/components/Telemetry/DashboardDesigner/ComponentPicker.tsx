@@ -5,7 +5,7 @@ import { DashboardConfig, ComponentNode, ComponentType } from '../../../types/da
 import { ALL_SCHEMAS, SPRITE_TYPES, FREEFORM_TYPES } from './components/registry';
 import { findNodeById } from './components/utils';
 import { DashTemplate } from './useTemplates';
-import { deepCopyNode } from './components/utils';
+import { deepCopyNode, collectFileRefs } from './components/utils';
 import { GET_BUILTIN_TEMPLATES } from './queries';
 import { confirmAsync } from '../../../lib/denim/components/ConfirmDialog';
 
@@ -66,6 +66,18 @@ const ComponentPicker: React.FC<Props> = ({
     if (!selectedId) return null;
     const node = findNodeById(dashboard.components, selectedId);
     return node?.type === 'group' ? selectedId : null;
+  };
+
+  // Templates (saved or built-in) reference sprite filenames that may not
+  // exist in this dashboard's own folder yet. Best-effort copy anything
+  // missing from the global /dash-sprites/ store so the drop renders
+  // immediately instead of showing broken images.
+  const copyMissingSprites = (node: ComponentNode) => {
+    if (!onCopyBuiltinSprite) return;
+    const existing = new Set(sprites.map(s => s.file));
+    for (const file of collectFileRefs(node)) {
+      if (!existing.has(file)) onCopyBuiltinSprite(file);
+    }
   };
 
   const addNode = (file?: string) => {
@@ -210,7 +222,7 @@ const ComponentPicker: React.FC<Props> = ({
                 </Stack>
                 <button
                   style={{ fontSize: '0.75em', padding: '2px 8px', cursor: 'pointer', flexShrink: 0 }}
-                  onClick={() => onAdd(deepCopyNode(tmpl.component), parentId())}
+                  onClick={() => { copyMissingSprites(tmpl.component); onAdd(deepCopyNode(tmpl.component), parentId()); }}
                   title={`Add copy of ${tmpl.name}`}
                 >
                   Use
@@ -255,6 +267,7 @@ const ComponentPicker: React.FC<Props> = ({
                   onClick={() => {
                     try {
                       const component = JSON.parse(tmpl.component) as ComponentNode;
+                      copyMissingSprites(component);
                       onAdd(deepCopyNode(component), parentId());
                     } catch { /* malformed component */ }
                   }}
