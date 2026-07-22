@@ -47,6 +47,17 @@ const SetupGuard: React.FC = () => {
   return <SetupWizard onComplete={() => setWizardDone(true)} />;
 };
 
+// Root landing ("/") — the user's own Launch Page setting wins when set,
+// otherwise falls back to Telemetry Admin. Already resolved from cache by
+// the time this renders: Denim's own top-level `my` query gates rendering
+// any routes at all until it resolves, so this never shows a loading flash.
+const DefaultLanding: React.FC = () => {
+  const { data, loading } = useQuery(dispatcher.my, { fetchPolicy: 'cache-first' });
+  if (loading || !data) return null;
+  const launchPage = (data as any)?.my?.settings?.launchPage;
+  return <Navigate to={launchPage ? `/${launchPage}` : '/telemetryadmin/default'} replace />;
+};
+
 const App: React.FC = () => {
   const style = getStyle();
   return (
@@ -61,7 +72,7 @@ const App: React.FC = () => {
             <Logo className={style.logoLink} {...props} />
           </Link>
         )}
-        RootComponent={() => <Navigate to="/telemetryadmin/default" replace />}
+        RootComponent={DefaultLanding}
         Controls={TelemetryControls}
         components={{ Shakers, LedsDevices, ShiftLights, SimWindDevices, TelemetryAdmin }}
         themes={THEMES}
